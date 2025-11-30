@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  arch-linux:
+    desc: Install the needed system packages through pacman (uses sudo)
+    cmds:
+      - sudo pacman -Syy
+      - |
+        sudo pacman -S \
+        arm-none-eabi-gdb \
+        arm-none-eabi-gcc \
+        arm-none-eabi-newlib \
+        base-devel \
+        ccache \
+        cmake \
+        dfu-util \
+        direnv \
+        dtc \
+        file \
+        gperf \
+        gum \
+        jimtcl \
+        libftdi \
+        libusb \
+        make \
+        minicom \
+        ninja \
+        python-pip \
+        python-setuptools \
+        python-wheel \
+        tk \
+        wget \
+        xz \
+        yq
+      - yay -S asdf-vm

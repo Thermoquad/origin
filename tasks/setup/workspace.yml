@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  dependency-check:
+    cmd: "true"
+    desc: Ensure required tools are installed
+    internal: true
+    preconditions:
+      - msg: Ensure 'python' is on the $PATH
+        sh: type -p python3
+      - msg: Ensure 'git' is on the $PATH
+        sh: type -p git
+      - msg: Ensure 'direnv' is on the $PATH
+        sh: type -p direnv
+      - msg: Ensure 'asdf' is on the $PATH
+        sh: type -p asdf
+      - msg: Ensure 'cmake' is on the $PATH
+        sh: type -p cmake
+      - msg: Ensure 'ninja' is on the $PATH
+        sh: type -p ninja
+      - msg: Ensure the folder containing this git repo is named 'origin'
+        sh: test $(basename $(git rev-parse --show-toplevel)) = "origin"
+
+  python:
+    desc: Setup a python virtual environment
+    internal: true
+    status:
+      - test -d ../.venv
+    cmds:
+      - cd .. && python3 -m venv .venv
+
+  asdf:
+    desc: Setup the workspace asdf configuration
+    internal: true
+    status:
+      - test -L ../.tool-versions
+    cmds:
+      - cd .. && ln -s origin/tool-versions .tool-versions
+
+  direnv:
+    desc: Setup the workspace direnv configuration
+    internal: true
+    status:
+      - test -L ../.envrc
+    cmds:
+      - cd .. && ln -s origin/envrc .envrc
+      - cd .. && direnv allow
+
+  directories:
+    desc: Create the workspace directories
+    internal: true
+    status:
+      - test -d ../modules
+      - test -d ../tools && test -d ../tools/installs
+      - test -d ../bin
+      - test -d ../tmp
+    cmds:
+      - cd .. && mkdir -p modules
+      - cd .. && mkdir -p bin
+      - cd .. && mkdir -p tmp
+      - cd .. && mkdir -p tools/installs

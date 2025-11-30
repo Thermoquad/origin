@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+includes:
+  system-install: tasks/system-packages.yml
+
+  setup-workspace:
+    taskfile: tasks/setup/workspace.yml
+
+  setup-zephyr:
+    taskfile: tasks/setup/zephyr.yml
+    flatten: true
+
+  setup-pico-tooling:
+    taskfile: tasks/setup/raspberry-pi-pico.yml
+    flatten: true
+
+tasks:
+  setup-workspace:
+    desc: Prepare the workspace for the install step
+    cmds:
+      - task: setup-workspace:dependency-check
+      - task: setup-workspace:python
+      - task: setup-workspace:asdf
+      - task: setup-workspace:direnv
+      - task: setup-workspace:directories
+
+  install-workspace:
+    desc: Install SDKs and tooling in the workspace
+    preconditions:
+      - msg: Check that the workspace .envrc is properly linked
+        sh: test "$(readlink -f envrc)" = "$(readlink -f ../.envrc)"
+      - msg: Check that the workspace .tool-versions is properly linked
+        sh: test "$(readlink -f tool-versions)" = "$(readlink -f ../.tool-versions)"
+      - msg: Check that the workspace Python virtual environment is active
+        sh: test "$(readlink -f ../.venv)" = "$VIRTUAL_ENV"
+    cmds:
+      - task: install-zephyr
+      - task: install-pico-tooling
+
+  uninstall-workspace:
+    desc: Remove all of the SDKs and tooling in the workspace
+    cmds:
+      - rm -rf ../.venv
+      - rm -rf ../.west
+      - rm -f  ../.envrc
+      - rm -f  ../.tool-versions
+      - rm -rf ../modules
+      - rm -rf ../bin
+      - rm -rf ../bootloader
+      - rm -rf ../tmp
+      - rm -rf ../tools
+      - rm -rf ../zephyr

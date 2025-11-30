@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+if [ -d ".venv" ]; then
+  source ./.venv/bin/activate
+fi
+
+export ZEPHYR_SDK_INSTALL_DIR="$(readlink -f tools/zephyr-sdk)"
+export ZEPHYR_BASE="$(readlink -f zephyr)"
+export PICO_SDK_PATH="$(readlink -f tools/pico-sdk)"
+export PATH="$(readlink -f ./bin):$PATH"
+

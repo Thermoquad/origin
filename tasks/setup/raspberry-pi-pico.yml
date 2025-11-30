@@ -1,0 +1,154 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+vars:
+  PICO_SDK_VERSION: "2.2.0"
+  TOOLING_DIR:
+    sh: readlink -f ../tools
+  TOOLING_BIN:
+    sh: readlink -f ../bin
+
+env:
+  PICO_SDK_VERSION: "{{.PICO_SDK_VERSION}}"
+  PICO_TOOL_VERSION: "{{.PICO_SDK_VERSION}}-a4"
+  OPENOCD_VERSION: "sdk-{{.PICO_SDK_VERSION}}"
+  INSTALL_DIR: "{{.TOOLING_DIR}}/installs"
+  PICO_SDK_PATH: "{{.TOOLING_DIR}}/pico-sdk-{{.PICO_SDK_VERSION}}"
+  TOOLING_DIR: "{{.TOOLING_DIR}}"
+  TOOLING_BIN: "{{.TOOLING_BIN}}"
+
+tasks:
+  install-pico-tooling:
+    desc: Install tooling for the Raspberry Pi Pico
+    internal: true
+    cmds:
+      - task: install-pico-sdk
+      - task: clone-picotool
+      - task: clone-pico-openocd
+      - task: build-picotool
+      - task: build-pico-openocd
+      - task: install-pico-wifi-blob
+
+  install-pico-sdk:
+    desc: Install the Raspberry Pi Pico SDK
+    internal: true
+    status:
+      - test -L "$TOOLING_DIR/pico-sdk"
+      - test -d "$TOOLING_DIR/pico-sdk-$PICO_SDK_VERSION"
+    cmds:
+      - cd $TOOLING_DIR && git clone --branch $PICO_SDK_VERSION git@github.com:raspberrypi/pico-sdk "pico-sdk-$PICO_SDK_VERSION"
+      - cd $TOOLING_DIR && ln -s "pico-sdk-$PICO_SDK_VERSION" pico-sdk
+      - cd $TOOLING_DIR/pico-sdk && git submodule sync && git submodule update --init --recursive
+
+  reinstall-pico-sdk:
+    desc: Reinstall the Raspberry Pi Pico SDK
+    cmds:
+      - rm -f  "$TOOLING_DIR/pico-sdk"
+      - rm -rf "$TOOLING_DIR/pico-sdk-$PICO_SDK_VERSION"
+      - task: install-pico-sdk
+
+  clone-picotool:
+    desc: Clone the picotool (manual flashing tool) repo
+    internal: true
+    status:
+      - test -d $TOOLING_DIR/picotool
+    cmds:
+      - cd $TOOLING_DIR && git clone --branch $PICO_TOOL_VERSION git@github.com:raspberrypi/picotool
+      - cd $TOOLING_DIR/picotool && git submodule sync && git submodule update --init --recursive
+
+  build-picotool:
+    desc: Compile picotool
+    internal: true
+    env:
+      BUILD_DIR: "{{.TOOLING_DIR}}/picotool/build"
+    status:
+      - test -d $BUILD_DIR
+      - test -d $INSTALL_DIR/picotool
+      - test -L $TOOLING_BIN/picotool
+    cmds:
+      - env
+      - mkdir -p $BUILD_DIR
+      - mkdir -p $INSTALL_DIR/picotool
+      - cd $BUILD_DIR && cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR -DPICOTOOL_FLAT_INSTALL=1 -G Ninja ..
+      - cd $BUILD_DIR && ninja && ninja install
+      - cd $TOOLING_BIN && ln -s ../tools/installs/picotool/picotool picotool
+
+  clean-picotool:
+    desc: Remove picotool and the build artifacts
+    internal: true
+    env:
+      BUILD_DIR: "{{.TOOLING_DIR}}/picotool/build"
+    cmds:
+      - rm -rf $INSTALL_DIR/picotool
+      - rm -f  $TOOLING_BIN/picotool
+      - rm -rf $TOOLING_DIR/picotool
+
+  rebuild-picotool:
+    desc: Rebuild picotool and it's dependencies
+    cmds:
+      - task: clean-picotool
+      - task: clone-picotool
+      - task: build-picotool
+
+  clone-pico-openocd:
+    desc: Clone the pico varient of OpenOCD
+    internal: true
+    status:
+      - test -d $TOOLING_DIR/openocd
+    cmds:
+      - cd $TOOLING_DIR && git clone --branch $OPENOCD_VERSION git@github.com:raspberrypi/openocd
+      - cd $TOOLING_DIR/openocd && git submodule sync && git submodule update --init --recursive
+
+  build-pico-openocd:
+    desc: Compile the pico varient of OpenOCD
+    internal: true
+    env:
+      BUILD_DIR: "{{.TOOLING_DIR}}/openocd"
+    status:
+      - test -d $INSTALL_DIR/openocd
+      - test -L $TOOLING_BIN/openocd
+    cmds:
+      - mkdir -p $INSTALL_DIR/openocd
+      - cd $BUILD_DIR && ./bootstrap
+      - cd $BUILD_DIR && ./configure --enable-picoprobe --prefix=$INSTALL_DIR/openocd
+      - cd $BUILD_DIR && make
+      - cd $BUILD_DIR && make install
+      # Keep the git repo clean
+      - cd $BUILD_DIR && rm -f doc/openocd.info-3
+      - cd $TOOLING_BIN && ln -s ../tools/installs/openocd/bin/openocd openocd
+
+  clean-pico-openocd:
+    desc: Remove OpenOCD and all of it's build artifacts
+    internal: true
+    env:
+      BUILD_DIR: "{{.TOOLING_DIR}}/openocd"
+    cmds:
+      - rm -rf $INSTALL_DIR/openocd
+      - rm -f  $TOOLING_BIN/openocd
+      - rm -rf $BUILD_DIR
+
+  rebuild-openocd:
+    desc: Rebuild OpenOCD and it's dependencies
+    cmds:
+      - task: clean-pico-openocd
+      - task: build-pico-openocd
+
+  rebuild-pico-tooling:
+    desc: Rebuild all the tools for the pico that are compiled
+    cmds:
+      - task: clean-pico-openocd
+      - task: clean-picotool
+      - task: build-pico-openocd
+      - task: build-picotool
+
+  install-pico-wifi-blob:
+    desc: Install the Infineon Wifi blob for Zephyr to use
+    internal: true
+    preconditions:
+      - msg: Ensure the workspace Python virtual environment is active
+        sh: test "$(readlink -f ../.venv)" = "$VIRTUAL_ENV"
+      - msg: Ensure west is installed
+        sh: test -e ../.venv/bin/west
+    status:
+      - test -d ../modules/hal/infineon/zephyr/blobs/img
+    cmd: cd .. && west blobs fetch hal_infineon
