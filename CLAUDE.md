@@ -75,6 +75,12 @@ Thermoquad/                    # Organization root (this directory)
 ### `tools/` - Development Tools
 - **Purpose:** Scripts and utilities for development workflow
 - **Examples:** Build scripts, flash utilities, code generators
+- **Notable Tools:**
+  - `heliostat/` - Helios serial protocol analyzer (Go)
+    - Real-time packet decoder for Helios serial protocol
+    - Validates CRC, decodes message types, displays telemetry
+    - Usage: `heliostat -port /dev/ttyACM0 [-baud 115200]`
+    - See `tools/heliostat/main.go` for implementation
 
 ---
 
