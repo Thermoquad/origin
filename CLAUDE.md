@@ -77,10 +77,12 @@ Thermoquad/                    # Organization root (this directory)
 - **Examples:** Build scripts, flash utilities, code generators
 - **Notable Tools:**
   - `heliostat/` - Helios serial protocol analyzer (Go)
-    - Real-time packet decoder for Helios serial protocol
-    - Validates CRC, decodes message types, displays telemetry
-    - Usage: `heliostat -port /dev/ttyACM0 [-baud 115200]`
-    - See `tools/heliostat/main.go` for implementation
+    - Real-time packet decoder and error detector
+    - Cobra CLI with `raw_log` and `error_detection` commands
+    - TUI mode with live statistics (default)
+    - Reusable `pkg/helios_protocol` Go package
+    - Usage: `heliostat error_detection --port /dev/ttyUSB0`
+    - See `tools/heliostat/CLAUDE.md` for documentation
 
 ---
 
@@ -156,8 +158,8 @@ Thermoquad/                    # Organization root (this directory)
 
 ```bash
 task build-firmware    # Build firmware
-task flash             # Flash to device
-task clean             # Clean build artifacts
+task flash-firmware    # Flash to device
+task rebuild-firmware  # Clean and rebuild in one command
 ```
 
 **Why:**
@@ -165,6 +167,32 @@ task clean             # Clean build artifacts
 - Includes formatting and validation steps
 - Used by CI/CD pipelines
 - Handles proper command sequencing
+
+### Firmware Flashing Safety
+
+**CRITICAL SAFETY REQUIREMENT - AI ASSISTANTS READ CAREFULLY:**
+
+**NEVER automatically execute `task flash-firmware` or any firmware flashing command.**
+
+Thermoquad systems control safety-critical hardware (burners, pumps, motors). Flashing incorrect firmware can cause:
+- Equipment damage
+- Fire hazard
+- Personal injury
+
+**Required Procedure:**
+1. Build firmware with `task build-firmware`
+2. Show build output to confirm success
+3. **ASK the user to manually flash** the firmware
+4. Wait for user to execute `task flash-firmware` themselves
+5. Only proceed after user confirms successful flash
+
+**Why This Matters:**
+- User must verify build artifacts before deployment
+- Physical safety interlock (user presence required)
+- Prevents accidental firmware updates during debugging
+- Allows user to abort if environment is unsafe
+
+**Remember:** You can build firmware, but you cannot flash it. The user has physical control over when firmware is deployed to hardware.
 
 ---
 
@@ -236,20 +264,36 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 - **Location:** `apps/helios/`
 - **Platform:** Raspberry Pi Pico 2 (RP2350A)
 - **Purpose:** Liquid fuel burner ignition control unit
+- **Key Features:** State machine, temperature PID, motor control, serial protocol
 - **Documentation:** `apps/helios/CLAUDE.md`
 
-#### Slate - (Planned)
-- **Status:** 🔲 Planned
+#### Slate - Controller Firmware
+- **Status:** ✅ Active development
 - **Location:** `apps/slate/`
-- **Platform:** Raspberry Pi Pico 2
+- **Platform:** Raspberry Pi Pico 2 (RP2350A)
+- **Purpose:** Controller with LVGL display for Helios telemetry monitoring
+- **Key Features:** LVGL display, serial communication, telemetry processing
+- **Documentation:** `apps/slate/CLAUDE.md`
 
 ### Shared Libraries
 
-#### Serial Protocol Library (Planned)
-- **Status:** 🔲 Planned
-- **Location:** `modules/lib/serial/` (or similar)
-- **Purpose:** Shared serial communication protocol for Thermoquad devices
-- **Usage:** Shared between firmware (ICU) and controller applications
+#### Fusain - Helios Serial Protocol Library
+- **Status:** ✅ Implemented
+- **Location:** `modules/lib/fusain/`
+- **Purpose:** Shared C library for Helios serial protocol
+- **Usage:** Used by both Helios (ICU) and Slate (controller)
+- **Features:** CRC-16-CCITT, byte stuffing, packet encoding/decoding
+- **Documentation:** `modules/lib/fusain/CLAUDE.md`
+
+### Development Tools
+
+#### Heliostat - Serial Protocol Analyzer
+- **Status:** ✅ Implemented
+- **Location:** `tools/heliostat/`
+- **Language:** Go
+- **Purpose:** Real-time Helios protocol analyzer and error detector
+- **Features:** Cobra CLI, TUI mode, error detection, statistics tracking
+- **Documentation:** `tools/heliostat/CLAUDE.md`
 
 ---
 
@@ -338,7 +382,33 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 - **Pico 2 Documentation:** https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html
 
 ### Project Documentation
-- **Helios:** `apps/helios/CLAUDE.md` - Complete Helios firmware guide
+
+Each project has its own CLAUDE.md file with detailed documentation:
+
+**Firmware Applications:**
+- **Helios:** `apps/helios/CLAUDE.md` - Burner ICU firmware (RP2350A)
+  - State machine, PID control, serial protocol, Zbus architecture
+  - Controllers: temperature, motor, pump, glow plug
+  - Complete operational documentation
+
+- **Slate:** `apps/slate/CLAUDE.md` - Slate firmware (RP2350A)
+  - LVGL display integration
+  - Helios telemetry monitoring
+  - Serial communication via Fusain library
+
+**Shared Libraries:**
+- **Fusain:** `modules/lib/fusain/CLAUDE.md` - Helios serial protocol library
+  - Shared C library for Helios protocol encoding/decoding
+  - Used by both ICU (Helios) and controller (Slate)
+  - CRC-16-CCITT, byte stuffing, packet framing
+  - Message types, telemetry bundles, command structures
+
+**Development Tools:**
+- **Heliostat:** `tools/heliostat/CLAUDE.md` - Serial protocol analyzer (Go)
+  - Real-time packet decoder and validator
+  - Error detection mode with statistics tracking
+  - TUI interface with Bubbletea
+  - Reusable `pkg/helios_protocol` Go package
 
 ---
 
@@ -365,7 +435,7 @@ This is the Thermoquad project organization. For questions or issues:
 
 ---
 
-**Last Updated:** 2025-12-31
+**Last Updated:** 2026-01-04
 
 **Organization Maintainer:** kazw
 
