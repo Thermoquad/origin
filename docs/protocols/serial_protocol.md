@@ -203,7 +203,7 @@ Configuration commands set persistent parameters on appliances. Changes SHOULD p
 | 0x12 | TEMP_CONFIG | Configure temperature controller parameters | 48 bytes |
 | 0x13 | GLOW_CONFIG | Configure glow plug parameters | 16 bytes |
 | 0x14 | DATA_SUBSCRIPTION | Subscribe to data from appliance (for routing) | 16 bytes |
-| 0x15 | DATA_UNSUBSCRIPTION | Unsubscribe from appliance data | 8 bytes |
+| 0x15 | DATA_UNSUBSCRIBE | Unsubscribe from appliance data | 8 bytes |
 | 0x16 | TELEMETRY_CONFIG | Enable/disable telemetry broadcasts | 12 bytes |
 | 0x17-0x1E | *Reserved* | Reserved for future configuration commands | - |
 | 0x1F | DISCOVERY_REQUEST | Request device capabilities | 0 bytes |
@@ -511,7 +511,7 @@ When a router controller receives this command, it MUST validate:
 - Subscriber controllers SHOULD periodically re-send DATA_SUBSCRIPTION to maintain routing
 - Routers MAY limit the number of active subscriptions (implementation-defined, recommend ≥10)
 
-### 0x15 - DATA_UNSUBSCRIPTION
+### 0x15 - DATA_UNSUBSCRIBE
 
 **Direction:** Controller → Controller (for routing scenarios)
 
