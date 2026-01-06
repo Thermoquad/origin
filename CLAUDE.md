@@ -17,7 +17,10 @@ Thermoquad/                    # Organization root (this directory)
 │   ├── CLAUDE.md              # This file (canonical location)
 │   ├── west.yml               # West manifest for Zephyr workspace
 │   ├── Taskfile.yml           # Organization-level task definitions
-│   └── tasks/                 # Shared task scripts
+│   ├── tasks/                 # Shared task scripts
+│   └── docs/                  # Organization-level documentation
+│       └── protocols/         # Protocol specifications
+│           └── serial_protocol.md  # Fusain Protocol v2.0
 ├── apps/                      # Firmware applications
 │   ├── helios/                # Helios burner ICU firmware
 │   ├── slate/                 # Slate firmware (planned)
@@ -41,6 +44,7 @@ Thermoquad/                    # Organization root (this directory)
   - `west.yml` - Defines workspace dependencies and module locations
   - `Taskfile.yml` - Organization-level build and development tasks
   - `CLAUDE.md` - This file
+  - `docs/protocols/` - Organization-level protocol specifications (Fusain Protocol v2.0)
   - `.envrc`, `.tool-versions` - Development environment configuration
 - **Git:** This is a separate git repository
 - **Symlinks:** Configuration files are symlinked to org root for convenience
@@ -212,6 +216,117 @@ Thermoquad systems control safety-critical hardware (burners, pumps, motors). Fl
 - Document "why" not "what"
 - Explain safety-critical logic and non-obvious behavior
 
+### File Organization
+
+**Standard Order for C Source Files:**
+
+C source files should be organized in the following order with clearly marked comment sections:
+
+1. **Includes** - All `#include` statements
+2. **Config** - Configuration constants and logging registration
+3. **State Struct Definition** - Data structures for module state
+4. **Static Variables** - File-scope static variables
+5. **Forward Declarations** - Function prototypes for internal functions
+6. **Public API** - Public functions exposed via headers
+7. **Thread Functions** - Thread entry points (if applicable)
+8. **Init Functions** - Initialization functions (if any)
+9. **Hardware Functions** - Hardware-specific code (e.g., UART polling)
+10. **Helper Functions** - Internal helper functions (may have sub-groups)
+
+**Comment Section Format:**
+
+```c
+//////////////////////////////////////////////////////////////
+// Section Name
+//////////////////////////////////////////////////////////////
+```
+
+**Example Structure:**
+
+```c
+// Includes
+#include <zephyr/kernel.h>
+#include <project/header.h>
+
+LOG_MODULE_REGISTER(module_name);
+
+//////////////////////////////////////////////////////////////
+// Config
+//////////////////////////////////////////////////////////////
+
+#define LOOP_SLEEP_MS 100
+#define TIMEOUT_MS 30000
+
+//////////////////////////////////////////////////////////////
+// State Struct Definition
+//////////////////////////////////////////////////////////////
+
+struct module_state {
+  bool enabled;
+  uint64_t last_update_time;
+};
+
+//////////////////////////////////////////////////////////////
+// Static Variables
+//////////////////////////////////////////////////////////////
+
+static struct module_state state;
+static const struct device* uart_dev;
+
+//////////////////////////////////////////////////////////////
+// Forward Declarations
+//////////////////////////////////////////////////////////////
+
+static void process_data(void);
+static int init_hardware(void);
+
+//////////////////////////////////////////////////////////////
+// Public API
+//////////////////////////////////////////////////////////////
+
+void public_function(void) {
+  // Implementation
+}
+
+//////////////////////////////////////////////////////////////
+// Thread Functions
+//////////////////////////////////////////////////////////////
+
+int worker_thread(void) {
+  // Thread implementation
+}
+
+//////////////////////////////////////////////////////////////
+// Init Functions
+//////////////////////////////////////////////////////////////
+
+static int init_hardware(void) {
+  // Initialization
+}
+
+//////////////////////////////////////////////////////////////
+// Hardware Functions
+//////////////////////////////////////////////////////////////
+
+static void poll_uart(void) {
+  // UART polling
+}
+
+//////////////////////////////////////////////////////////////
+// Helper Functions
+//////////////////////////////////////////////////////////////
+
+static void process_data(void) {
+  // Data processing
+}
+```
+
+**Notes:**
+- Not all sections are required - use only what's needed for the file
+- Sub-sections can be added under "Helper Functions" for organization
+- Keep related code together within each section
+- Use consistent comment divider format (60 slashes)
+
 ---
 
 ## Version Control
@@ -283,6 +398,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 - **Purpose:** Shared C library for Helios serial protocol
 - **Usage:** Used by both Helios (ICU) and Slate (controller)
 - **Features:** CRC-16-CCITT, byte stuffing, packet encoding/decoding
+- **Protocol Specification:** `docs/protocols/serial_protocol.md` (Fusain Protocol v2.0)
 - **Documentation:** `modules/lib/fusain/CLAUDE.md`
 
 ### Development Tools
