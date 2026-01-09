@@ -10,9 +10,11 @@ The Fusain protocol is a binary packet-based protocol for communicating with Hel
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119.txt).
 
+**Terminology Note:** Throughout this document, "ignore" means "silently ignore" - the receiver discards the packet without sending any response or error message.
+
 **Transport Layer:**
 - UART with optional physical layer translation (RS-485, LIN)
-- Default Baud Rate: 115200 (adjustable for LIN compatibility)
+- Baud Rate: 115200 (UART, RS-485) or 19200 (LIN) - determined by physical layer
 - Data Format: 8N1 (8 data bits, no parity, 1 stop bit)
 - Flow Control: None
 - See "Physical Layer Compatibility" section for RS-485 and LIN requirements
@@ -34,7 +36,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - Appliances broadcast periodic telemetry when enabled by controller (configurable interval)
 - Telemetry broadcasting is disabled by default for boot synchronization
 - Default/recommended interval: 100ms (range: 100-5000ms)
-- **Typical appliance:** 1 motor, 1 thermometer, 1 pump, 1 glow plug (e.g., Helios ICU)
+- **Typical appliance:** 1 motor, 1 temperature sensor, 1 pump, 1 glow plug (e.g., Helios ICU)
 
 ---
 
@@ -78,18 +80,18 @@ All packets follow this structure:
 - Controllers MAY use broadcast address for discovery or simultaneous control
 - Appliances MUST respond with their own address in data packets
 - Monitors MUST use their own address for filtering (if applicable)
+- Appliances MUST silently ignore packets addressed to other devices (non-matching, non-broadcast address)
 
 **Broadcast Address Behavior (0x0000000000000000):**
 
 When a device receives a packet with ADDRESS = 0x0000000000000000:
 
 1. **Appliances:**
-   - MUST process the command if it's a valid command message (0x10-0x2F)
-   - MUST NOT send responses to broadcast commands (prevents bus collisions)
+   - MUST process the command if it's a valid command message (0x10-0x2F), except for Controller → Controller commands (0x14-0x15) which MUST be silently ignored
+   - MUST NOT respond to broadcast-addressed commands (prevents bus collisions)
    - **Exception:** DISCOVERY_REQUEST (0x1F) triggers DEVICE_ANNOUNCE response
    - **Exception response behavior:**
-     - RS-485 multi-drop: MUST add random delay (0-50ms) before responding to avoid collisions
-     - Plain UART/LIN: MAY respond immediately (controller expects potential collisions)
+     - Appliances MUST add random delay (0-50ms) before responding to avoid collisions
      - Response ADDRESS field: MUST use appliance's own address (source)
 
 2. **Controllers:**
@@ -109,30 +111,22 @@ When a device receives a packet with ADDRESS = 0x0000000000000000:
 
 | Command Type | Appliance Responds? | Response ADDRESS | Notes |
 |--------------|---------------------|------------------|-------|
-| DISCOVERY_REQUEST (0x1F) | **YES** | Own address | Add random delay on RS-485 |
-| MOTOR_CONFIG (0x10-0x13) | No response | - | Config silently applied |
+| DISCOVERY_REQUEST (0x1F) | **YES** | Own address | Add random delay (0-50ms) |
+| Config commands (0x10-0x13, 0x16-0x17) | No response | - | Config silently applied |
 | STATE_COMMAND (0x20) | No response | - | All appliances execute |
 | PING_REQUEST (0x2F) | No response | - | Would cause bus collision |
 | All other commands | No response | - | Processed but no response |
 
 **Collision Avoidance for DISCOVERY_REQUEST:**
 
-DISCOVERY_REQUEST is the ONLY broadcast command that expects responses. To prevent bus collisions:
+DISCOVERY_REQUEST is the ONLY broadcast command that expects responses. To prevent bus collisions on multi-drop networks (RS-485):
 
-- **RS-485/multi-drop networks:**
-  - Each appliance MUST wait a random delay (0-50ms) before sending DEVICE_ANNOUNCE
-  - Controller MUST wait at least 100ms (preferably 200ms) to receive all responses
-  - Controller MAY receive partial/corrupted responses due to collisions
-  - Controller SHOULD retry discovery if expected devices don't respond
+- Each appliance MUST wait a random delay (0-50ms) before sending DEVICE_ANNOUNCE
+- Controller MUST wait at least 100ms (preferably 200ms) to receive all responses
+- Controller MAY receive partial/corrupted responses due to collisions on RS-485
+- Controller SHOULD retry discovery if expected devices don't respond
 
-- **Point-to-point networks (plain UART):**
-  - No collision possible (only one appliance)
-  - Appliance MAY respond immediately without delay
-
-- **LIN networks:**
-  - LIN master-slave architecture prevents collisions
-  - Transceiver IC handles response scheduling
-  - No random delay needed
+**Note:** The random delay is required for all physical layers to ensure consistent behavior. While point-to-point UART and LIN networks don't strictly require collision avoidance, the universal delay simplifies implementation and ensures protocol compatibility across physical layers.
 
 **Example - Broadcast Emergency Stop:**
 ```
@@ -176,7 +170,7 @@ Controller: Receives 3 DEVICE_ANNOUNCE responses over 200ms window
 
 ### Byte Stuffing
 
-To prevent confusion with START (0x7E) and END (0x7F) delimiters appearing in the payload, address, or CRC:
+To prevent confusion with START (0x7E) and END (0x7F) delimiters appearing in the data between START and END (LENGTH, ADDRESS, MSG_TYPE, PAYLOAD, and CRC):
 
 **Escape Sequence:** Use `0x7D` as escape byte
 
@@ -200,12 +194,13 @@ Configuration commands set persistent parameters on appliances. Changes SHOULD p
 |----------|------|-------------|--------------|
 | 0x10 | MOTOR_CONFIG | Configure motor controller parameters | 48 bytes |
 | 0x11 | PUMP_CONFIG | Configure pump controller parameters | 16 bytes |
-| 0x12 | TEMP_CONFIG | Configure temperature controller parameters | 48 bytes |
+| 0x12 | TEMPERATURE_CONFIG | Configure temperature controller parameters | 48 bytes |
 | 0x13 | GLOW_CONFIG | Configure glow plug parameters | 16 bytes |
-| 0x14 | DATA_SUBSCRIPTION | Subscribe to data from appliance (for routing) | 16 bytes |
+| 0x14 | DATA_SUBSCRIPTION | Subscribe to data from appliance (for routing) | 8 bytes |
 | 0x15 | DATA_UNSUBSCRIBE | Unsubscribe from appliance data | 8 bytes |
-| 0x16 | TELEMETRY_CONFIG | Enable/disable telemetry broadcasts | 12 bytes |
-| 0x17-0x1E | *Reserved* | Reserved for future configuration commands | - |
+| 0x16 | TELEMETRY_CONFIG | Enable/disable telemetry broadcasts | 8 bytes |
+| 0x17 | TIMEOUT_CONFIG | Configure communication timeout | 8 bytes |
+| 0x18-0x1E | *Reserved* | Reserved for future configuration commands | - |
 | 0x1F | DISCOVERY_REQUEST | Request device capabilities | 0 bytes |
 
 ### Control Commands (Controller → Appliance)
@@ -218,8 +213,9 @@ Control commands provide real-time operational control without changing persiste
 | 0x21 | MOTOR_COMMAND | Set motor RPM | 8 bytes |
 | 0x22 | PUMP_COMMAND | Set pump rate | 8 bytes |
 | 0x23 | GLOW_COMMAND | Control glow plug | 8 bytes |
-| 0x24 | TEMP_COMMAND | Temperature controller control | 20 bytes |
-| 0x25-0x2E | *Reserved* | Reserved for future control commands | - |
+| 0x24 | TEMPERATURE_COMMAND | Temperature controller control | 20 bytes |
+| 0x25 | SEND_TELEMETRY | Request telemetry data (polling mode) | 8 bytes |
+| 0x26-0x2E | *Reserved* | Reserved for future control commands | - |
 | 0x2F | PING_REQUEST | Heartbeat/connectivity check | 0 bytes |
 
 ### Telemetry Data (Appliance → Controller)
@@ -232,22 +228,39 @@ Telemetry messages provide real-time status and sensor data from appliances.
 | 0x31 | MOTOR_DATA | Motor telemetry | 32 bytes | Per telemetry interval |
 | 0x32 | PUMP_DATA | Pump status and events | 16 bytes | On event |
 | 0x33 | GLOW_DATA | Glow plug status | 12 bytes | On event |
-| 0x34 | TEMP_DATA | Temperature readings | 32 bytes | Per telemetry interval |
-| 0x35 | TELEMETRY_BUNDLE | Consolidated telemetry | Variable: 42-108 bytes | Per telemetry interval |
-| 0x36 | DEVICE_ANNOUNCE | Device capabilities announcement | 8 bytes | On DISCOVERY_REQUEST |
-| 0x37-0x3E | *Reserved* | Reserved for future telemetry messages | - | - |
+| 0x34 | TEMPERATURE_DATA | Temperature readings | 32 bytes | Per telemetry interval |
+| 0x35 | DEVICE_ANNOUNCE | Device capabilities announcement | 8 bytes | On DISCOVERY_REQUEST |
+| 0x36-0x3E | *Reserved* | Reserved for future telemetry messages | - | - |
 | 0x3F | PING_RESPONSE | Heartbeat response | 4 bytes | On request |
 
-### Error Messages (Bidirectional)
+### Error Messages (Appliance → Controller)
 
-Error messages indicate protocol or command validation failures.
+Error messages indicate command validation failures. Appliances send error messages to controllers when commands cannot be processed.
 
 | MSG_TYPE | Name | Description | Payload Size |
 |----------|------|-------------|--------------|
-| 0xE0 | ERROR_INVALID_MSG | Invalid message received | 4 bytes |
-| 0xE1 | ERROR_CRC_FAIL | CRC validation failed | 4 bytes |
-| 0xE2 | ERROR_INVALID_CMD | Command validation failed | 4 bytes |
-| 0xE3 | ERROR_STATE_REJECT | Command rejected by state machine | 4 bytes |
+| 0xE0 | ERROR_INVALID_CMD | Command validation failed | 4 bytes |
+| 0xE1 | ERROR_STATE_REJECT | Command rejected by state machine | 4 bytes |
+| 0xE2-0xEF | *Reserved* | Reserved for future error messages | - |
+
+**Note:** CRC failures are not reported via error messages. Controllers should retransmit important commands if no response or acknowledgment is received. Critical commands like emergency stop MUST be sent repeatedly until confirmed.
+
+### Reserved Message Types
+
+Reserved message types (0x18-0x1E, 0x26-0x2E, 0x36-0x3E, 0xE2-0xEF) are placeholders for future protocol extensions.
+
+**Handling:**
+- Receivers MUST silently ignore packets with reserved message types
+- Receivers MUST NOT send error responses for reserved message types
+- This allows future protocol versions to add new message types without breaking existing implementations
+
+### Undefined Message Types
+
+Undefined message types (0x00-0x0F, 0x40-0xDF, 0xF0-0xFF) are not part of this protocol specification.
+
+**Handling:**
+- Receivers MUST silently ignore packets with undefined message types (same as reserved types)
+- Receivers MUST NOT send error responses for undefined message types
 
 ---
 
@@ -275,7 +288,7 @@ Configure motor controller parameters including PWM, PID gains, and RPM limits.
 ```
 
 **Fields:**
-- **motor** (i32): Motor index (0-9, typically 0)
+- **motor** (i32): Motor index (0 to motor_count-1, typically 0)
 - **pwm_period** (u32): PWM period in microseconds (e.g., 50 μs = 20kHz)
 - **pid_kp** (f64): Proportional gain for motor PID controller
 - **pid_ki** (f64): Integral gain for motor PID controller
@@ -295,10 +308,12 @@ Configure motor controller parameters including PWM, PID gains, and RPM limits.
 - min_pwm_duty: 10 μs
 
 **Validation:**
-- pwm_period MUST be > 0
-- max_rpm MUST be > min_rpm
-- min_pwm_duty MUST be < pwm_period
+- motor MUST be within device capability (0 to motor_count-1); invalid index returns ERROR_INVALID_CMD with code 2
+- pwm_period MUST be > 0; invalid value returns ERROR_INVALID_CMD with code 1
+- max_rpm MUST be > min_rpm; invalid value returns ERROR_INVALID_CMD with code 1
+- min_pwm_duty MUST be < pwm_period; invalid value returns ERROR_INVALID_CMD with code 1
 - PID gains MAY be 0 (disables that term)
+- PID gains MUST NOT be NaN or Infinity; invalid f64 values return ERROR_INVALID_CMD with code 1
 
 ### 0x11 - PUMP_CONFIG
 
@@ -320,7 +335,7 @@ Configure fuel pump parameters including pulse duration and recovery time.
 ```
 
 **Fields:**
-- **pump** (i32): Pump index (0-9, typically 0)
+- **pump** (i32): Pump index (0 to pump_count-1, typically 0)
 - **pulse_ms** (u32): Solenoid pulse duration in milliseconds (e.g., 50)
 - **recovery_ms** (u32): Recovery time after pulse in milliseconds (e.g., 50)
 - **padding** (4 bytes): Reserved for future use
@@ -330,22 +345,23 @@ Configure fuel pump parameters including pulse duration and recovery time.
 - recovery_ms: 50
 
 **Validation:**
-- pulse_ms MUST be > 0
-- recovery_ms MUST be > 0
+- pump MUST be within device capability (0 to pump_count-1); invalid index returns ERROR_INVALID_CMD with code 2
+- pulse_ms MUST be > 0; invalid value returns ERROR_INVALID_CMD with code 1
+- recovery_ms MUST be > 0; invalid value returns ERROR_INVALID_CMD with code 1
 - Minimum pump rate = pulse_ms + recovery_ms (typically 100ms minimum)
 
 **Rationale:**
 - Pulse duration controls fuel delivery per cycle
 - Recovery time prevents solenoid overheating and ensures complete valve closure
 
-### 0x12 - TEMP_CONFIG
+### 0x12 - TEMPERATURE_CONFIG
 
 Configure temperature controller parameters including PID gains and sampling.
 
 **Payload Structure (48 bytes):**
 ```
 +-------------+--------+--------+--------+--------------+-----------+
-| thermometer | pid_kp | pid_ki | pid_kd | sample_count | read_rate |
+| temperature | pid_kp | pid_ki | pid_kd | sample_count | read_rate |
 +-------------+--------+--------+--------+--------------+-----------+
 | i32         | f64    | f64    | f64    | u32          | u32       |
 +-------------+--------+--------+--------+--------------+-----------+
@@ -358,7 +374,7 @@ Configure temperature controller parameters including PID gains and sampling.
 ```
 
 **Fields:**
-- **thermometer** (i32): Temperature controller index (0-9, typically 0)
+- **temperature** (i32): Temperature sensor index (0 to temperature_count-1, typically 0)
 - **pid_kp** (f64): Proportional gain for temperature PID controller
 - **pid_ki** (f64): Integral gain for temperature PID controller
 - **pid_kd** (f64): Derivative gain for temperature PID controller
@@ -374,14 +390,16 @@ Configure temperature controller parameters including PID gains and sampling.
 - read_rate: 50 ms
 
 **Validation:**
-- sample_count MUST be > 0
-- read_rate MUST be > 0
+- temperature MUST be within device capability (0 to temperature_count-1); invalid index returns ERROR_INVALID_CMD with code 2
+- sample_count MUST be > 0; invalid value returns ERROR_INVALID_CMD with code 1
+- read_rate MUST be > 0; invalid value returns ERROR_INVALID_CMD with code 1
 - PID gains MAY be 0 (disables that term)
+- PID gains MUST NOT be NaN or Infinity; invalid f64 values return ERROR_INVALID_CMD with code 1
 
 **Rationale:**
 - Moving average filter reduces sensor noise
 - Warmup time = sample_count × read_rate (60 × 50ms = 3 seconds)
-- PID gains tuned for inverted control (higher temp → higher RPM for cooling)
+- PID gains tuned for inverted control (higher temperature → higher RPM for cooling)
 
 ### 0x13 - GLOW_CONFIG
 
@@ -397,7 +415,7 @@ Configure glow plug parameters.
 ```
 
 **Fields:**
-- **glow** (i32): Glow plug index (0-9, typically 0)
+- **glow** (i32): Glow plug index (0 to glow_count-1, typically 0)
 - **max_duration** (u32): Maximum allowed glow duration in milliseconds (e.g., 300000 = 5 minutes)
 - **padding** (8 bytes): Reserved for future use
 
@@ -405,7 +423,8 @@ Configure glow plug parameters.
 - max_duration: 300000 ms (5 minutes)
 
 **Validation:**
-- max_duration MUST be > 0
+- glow MUST be within device capability (0 to glow_count-1); invalid index returns ERROR_INVALID_CMD with code 2
+- max_duration MUST be > 0; invalid value returns ERROR_INVALID_CMD with code 1
 - RECOMMENDED: max_duration ≤ 300000 ms (5 minutes) for safety
 
 **Rationale:**
@@ -416,68 +435,54 @@ Configure glow plug parameters.
 
 **Direction:** Controller → Controller (for routing scenarios)
 
-**Note:** This is NOT a Controller → Appliance command. This command is sent from one controller (subscriber) to another controller (router) to establish data forwarding.
+**Note:** This is NOT a Controller → Appliance command. This command is sent from one controller (subscriber) to another controller (router) to establish data forwarding over a point-to-point connection.
 
-Subscribe to receive copies of data messages from a specific appliance. Used for controller routing scenarios where one controller (router) is physically connected to an appliance, and another controller (subscriber) wants to receive telemetry data through the router.
+Subscribe to receive copies of ALL data messages from a specific appliance. Used for controller routing scenarios where one controller (router) is physically connected to an appliance, and another controller (subscriber) wants to receive telemetry data through the router.
 
-**Payload Structure (16 bytes):**
+**Payload Structure (8 bytes):**
 ```
-+-------------------+----------------+
-| appliance_address | message_filter |
-+-------------------+----------------+
-| u64               | u32            |
-+-------------------+----------------+
-
-+----------+
-| reserved |
-+----------+
-| u32      |
-+----------+
++-------------------+
+| appliance_address |
++-------------------+
+| u64               |
++-------------------+
 ```
 
 **Fields:**
 - **appliance_address** (u64): Address of the appliance to subscribe to
   - MUST be a valid appliance address (not a controller address)
   - MUST NOT be the broadcast address (0x0000000000000000)
-- **message_filter** (u32): Bitmask specifying which data message types to forward
-  - Each bit represents a data message type (0x30-0x3F)
-  - Bit 0 = STATE_DATA (0x30)
-  - Bit 1 = MOTOR_DATA (0x31)
-  - Bit 2 = PUMP_DATA (0x32)
-  - Bit 3 = GLOW_DATA (0x33)
-  - Bit 4 = TEMP_DATA (0x34)
-  - Bit 5 = TELEMETRY_BUNDLE (0x35)
-  - Bit 6 = DEVICE_ANNOUNCE (0x36)
-  - Bit 15 = PING_RESPONSE (0x3F)
-  - 0xFFFFFFFF = Subscribe to all data messages (common case)
-- **reserved** (u32): Reserved for future use, MUST be 0
 
 **Behavior:**
 
-When a controller (router) receives this command:
-1. Extracts subscriber address from the packet's ADDRESS field (sender of this command)
-2. Adds subscriber to routing table for the specified appliance_address
-3. When data messages are received from appliance_address, checks message type against message_filter
-4. If message type matches filter, forwards a copy to the subscriber over the physical layer where the subscription was received
+When a controller (router) receives this command over a point-to-point connection:
+1. Associates the subscription with the connection on which it was received
+2. Adds the connection to the routing table for the specified appliance_address
+3. When recognized data messages (0x30-0x35, 0x3F) are received from appliance_address, forwards those messages to the subscribed connection
+   - Routers MUST NOT forward packets with reserved message types (0x18-0x1E, 0x26-0x2E, 0x36-0x3E, 0xE2-0xEF)
+
+**Connection-Based Routing:**
+
+In a multi-drop topology, there is one controller and multiple appliances on the same bus. When a remote controller connects to another controller acting as a router, the connection is point-to-point (WiFi, Bluetooth, TCP, etc.). Subscriptions are associated with the connection, not a packet-level source address.
 
 **Multi-Hop Routing Example:**
 
-Controller A (WiFi/BT) wants telemetry from Appliance C (LIN bus) through Controller B (WiFi+LIN bridge):
+Controller A (WiFi) wants telemetry from Appliance C (LIN bus) through Controller B (WiFi+LIN bridge):
 
-1. Controller A sends DATA_SUBSCRIPTION to Controller B:
+1. Controller A establishes point-to-point connection to Controller B (via WiFi)
+
+2. Controller A sends DATA_SUBSCRIPTION to Controller B:
    - ADDRESS: Controller B's address
    - appliance_address: Appliance C's address
-   - message_filter: 0xFFFFFFFF (all data)
 
-2. Controller B receives subscription, adds Controller A to routing table for Appliance C
+3. Controller B receives subscription, associates it with the WiFi connection to Controller A
 
-3. When Appliance C sends telemetry (e.g., TELEMETRY_BUNDLE):
-   - Packet ADDRESS field: Controller B's address (or broadcast)
-   - Controller B receives packet, processes locally if needed
-   - Controller B checks routing table, sees Controller A is subscribed
-   - Controller B forwards packet to Controller A over WiFi/BT
+4. When Appliance C sends telemetry (e.g., MOTOR_DATA, TEMPERATURE_DATA, STATE_DATA):
+   - Controller B receives packet from LIN bus
+   - Controller B checks routing table, sees Controller A's connection is subscribed
+   - Controller B forwards packet to Controller A over the WiFi connection
 
-4. Controller A receives telemetry from Appliance C through Controller B
+5. Controller A receives telemetry from Appliance C through Controller B
 
 **Validation:**
 
@@ -485,31 +490,20 @@ When a router controller receives this command, it MUST validate:
 
 1. **appliance_address Validity:**
    - MUST NOT be the broadcast address (0x0000000000000000)
-   - If appliance_address doesn't exist on any connected physical layer:
-     - Router MAY ignore the subscription request silently
-     - Router MAY return ERROR_INVALID_CMD (if error responses are implemented)
-     - Router SHOULD NOT store subscriptions for non-existent appliances
    - Router MAY defer validation until first data message from that appliance
 
 2. **Subscription Table Capacity:**
    - Routers MAY limit the number of active subscriptions (implementation-defined)
    - RECOMMENDED minimum: 10 concurrent subscriptions per router
-   - When subscription table is full:
-     - Router MUST NOT accept new subscriptions
-     - Router SHOULD ignore the subscription request silently
-     - Router MAY evict oldest/least-recently-active subscription (LRU eviction)
-     - Router MAY return ERROR_INVALID_CMD (if error responses are implemented)
 
 3. **Duplicate Subscriptions:**
-   - If subscriber already has an active subscription to the same appliance:
-     - Router SHOULD update the message_filter for existing subscription
-     - Router SHOULD NOT create duplicate table entries
+   - If the same connection already has a subscription to the same appliance, the subscription is refreshed (timeout reset)
 
 **Important Notes:**
-- Subscriptions are NOT persistent - they are lost on power cycle or reset
-- Router controllers SHOULD implement subscription timeout (recommend 60 seconds without PING_REQUEST)
+- Subscriptions are NOT persistent - they are lost on power cycle, reset, or connection close
+- Router controllers SHOULD implement subscription timeout (recommend 60 seconds without PING_RESPONSE from subscriber)
 - Subscriber controllers SHOULD periodically re-send DATA_SUBSCRIPTION to maintain routing
-- Routers MAY limit the number of active subscriptions (implementation-defined, recommend ≥10)
+- Controller-to-controller links are expected to be high-bandwidth (WiFi, Bluetooth, TCP); lower-bandwidth links (e.g., LoRa) may require future protocol extensions for filtering
 
 ### 0x15 - DATA_UNSUBSCRIBE
 
@@ -530,57 +524,84 @@ Remove a previously established data subscription. The subscribing controller no
 
 **Fields:**
 - **appliance_address** (u64): Address of the appliance to unsubscribe from
-  - MUST match an existing subscription
-  - If no subscription exists, command is silently ignored
+  - If no subscription exists for this appliance on the connection, command is silently ignored
 
 **Behavior:**
 
-When a controller (router) receives this command:
-1. Extracts subscriber address from the packet's ADDRESS field (sender of this command)
-2. Removes subscriber from routing table for the specified appliance_address
-3. No longer forwards data messages from that appliance to the subscriber
+When a controller (router) receives this command over a point-to-point connection:
+1. Identifies the connection on which the command was received
+2. Removes the subscription for the specified appliance_address from that connection
+3. No longer forwards data messages from that appliance to the connection
 
 **Use Cases:**
 - Clean shutdown when subscriber controller is disconnecting
 - Reduce bandwidth usage when telemetry is no longer needed
-- Change subscription filter (unsubscribe, then re-subscribe with new filter)
 
 ### 0x16 - TELEMETRY_CONFIG
 
-Enable or disable periodic telemetry broadcasts, configure broadcast interval, and select telemetry format.
+Enable or disable periodic telemetry broadcasts and configure broadcast interval.
 
-**Payload Structure (12 bytes):**
+**Payload Structure (8 bytes):**
 ```
-+-------------------+-------------+-----------------+
-| telemetry_enabled | interval_ms | telemetry_mode  |
-+-------------------+-------------+-----------------+
-| u32               | u32         | u32             |
-+-------------------+-------------+-----------------+
++-------------------+-------------+
+| telemetry_enabled | interval_ms |
++-------------------+-------------+
+| u32               | u32         |
++-------------------+-------------+
 ```
 
 **Fields:**
 - **telemetry_enabled** (u32): Telemetry broadcast control
-  - 0 = Disable telemetry broadcasts (other parameters ignored)
+  - 0 = Disable telemetry broadcasts (interval_ms ignored)
   - 1 = Enable telemetry broadcasts at specified interval
 - **interval_ms** (u32): Telemetry broadcast interval in milliseconds
-  - MUST be within range: 100-5000 ms
-  - RECOMMENDED: 100 ms (default)
-  - Values outside range SHALL be clamped to nearest valid value
-- **telemetry_mode** (u32): Telemetry message format
-  - 0 = Bundled mode (default) - uses TELEMETRY_BUNDLE message
-  - 1 = Individual mode - sends MOTOR_DATA, TEMP_DATA, STATE_DATA separately
+  - 0 = Polling mode (telemetry is enabled but not automatically broadcast; use SEND_TELEMETRY command (0x25) to request data)
+  - MUST be within range: 0 or 100-5000 ms
+  - RECOMMENDED: 100 ms for automatic broadcasts
+  - Values 1-99 SHALL be clamped to 100 ms
+  - Values above 5000 SHALL be clamped to 5000 ms
+
+**Polling Mode:**
+
+When interval_ms=0, the appliance enables telemetry but does NOT automatically broadcast data messages. Instead, the controller must use the SEND_TELEMETRY command (0x25) to explicitly request telemetry data. This is useful for:
+- **Multi-appliance topologies:** Prevents bus collisions when multiple appliances would otherwise broadcast simultaneously
+- **Bandwidth-constrained links:** Controller can request only the specific data it needs
+- **Power-sensitive applications:** Reduces unnecessary transmissions
+
+In polling mode:
+- Appliance MUST send data messages only in response to SEND_TELEMETRY commands
+- PING_RESPONSE (0x3F) is always allowed in response to PING_REQUEST
+- E_STOP broadcasts are still permitted (safety takes precedence)
+- **IMPORTANT:** Controllers MUST still send periodic PING_REQUEST to prevent communication timeout. SEND_TELEMETRY does NOT reset the timeout timer.
+
+**Telemetry Messages (Broadcast Mode, interval_ms > 0):**
+
+When telemetry is enabled in broadcast mode, the appliance sends individual data messages automatically:
+- **MOTOR_DATA** (0x31): Sent per telemetry interval for each motor
+- **TEMPERATURE_DATA** (0x34): Sent per telemetry interval for each temperature sensor
+- **STATE_DATA** (0x30): Sent at 2.5× the telemetry interval (e.g., every 250ms at 100ms interval)
+- **PUMP_DATA** (0x32): Sent on pump events (cycle start, pulse end, cycle end)
+- **GLOW_DATA** (0x33): Sent on glow plug state changes
+
+For appliances with multiple motors or temperature sensors, a separate message is sent for each device at the configured interval.
+
+**Telemetry Messages (Polling Mode, interval_ms = 0):**
+
+In polling mode, ALL data messages (including PUMP_DATA and GLOW_DATA) are ONLY sent in response to SEND_TELEMETRY commands. Event-driven messages are NOT sent automatically; controllers must explicitly request pump and glow plug status when needed.
 
 **Default State:** Telemetry broadcasts are **disabled** on boot
 
 **Data Message Restriction:**
 - **IMPORTANT:** Appliances SHALL NOT send any data messages (0x30-0x3F) until a TELEMETRY_CONFIG command with telemetry_enabled=1 has been received
-- The ONLY exception is PING_RESPONSE (0x3F), which may be sent at any time in response to PING_REQUEST
+- **Exceptions:**
+  - PING_RESPONSE (0x3F), which may be sent at any time in response to PING_REQUEST
+  - E_STOP state broadcasts, which are sent regardless of TELEMETRY_CONFIG state (see "Emergency Stop Behavior")
 - This prevents unsolicited data messages before the controller is ready to receive them
 - Violating this restriction will cause decoder synchronization issues on the controller
 
 **Auto-Disable Behavior:**
-- If telemetry is enabled but no PING_REQUEST is received for 30 seconds, telemetry broadcasts are automatically disabled
-- This prevents the appliance from continuously transmitting when the controller is disconnected
+- Telemetry broadcasts are automatically disabled when the communication timeout elapses (see TIMEOUT_CONFIG)
+- The same timer controls both IDLE mode transition and telemetry auto-disable
 - Controller must re-enable telemetry after reconnecting
 
 **Rationale:**
@@ -595,11 +616,48 @@ Enable or disable periodic telemetry broadcasts, configure broadcast interval, a
 - Once synchronized, the controller can re-enable telemetry with TELEMETRY_CONFIG (enable=1)
 - This is particularly useful during boot or after communication errors when packet boundaries are lost
 
----
+### 0x17 - TIMEOUT_CONFIG
 
-## Control Command Formats
+Configure communication timeout behavior. Timeout mode provides a safety mechanism that transitions the appliance to IDLE mode and disables telemetry if communication with the controller is lost.
 
-**IMPORTANT:** All multi-byte integers (u32, i32, u64, f64) use **little-endian** byte order unless otherwise specified. CRC-16 is the only exception (big-endian).
+**Payload Structure (8 bytes):**
+```
++---------+------------+
+| enabled | timeout_ms |
++---------+------------+
+| u32     | u32        |
++---------+------------+
+```
+
+**Fields:**
+- **enabled** (u32): Timeout mode control
+  - 0 = Disable timeout mode (appliance runs indefinitely without controller)
+  - 1 = Enable timeout mode (default)
+- **timeout_ms** (u32): Timeout interval in milliseconds
+  - MUST be within range: 5000-60000 ms (5-60 seconds)
+  - RECOMMENDED: 30000 ms (30 seconds, default)
+  - Values outside range SHALL be clamped to nearest valid value
+
+**Default State:** Timeout mode is **enabled** on boot with 30-second timeout
+
+**Behavior When Enabled:**
+- Appliance tracks time since last PING_REQUEST received
+- **IMPORTANT:** Only PING_REQUEST resets the timeout timer. Other commands (STATE_COMMAND, MOTOR_COMMAND, SEND_TELEMETRY, etc.) do NOT reset the timer.
+- If timeout_ms elapses without receiving PING_REQUEST:
+  - Appliance automatically transitions to IDLE mode
+  - Telemetry broadcasts are automatically disabled
+- Prevents continued operation without controller supervision
+
+**Disabling Timeout Mode:**
+- Setting enabled=0 allows "headless" operation where the appliance runs without an attached controller
+- Use case: Appliance configured via initial commands, then controller disconnects
+- **WARNING:** Disabling timeout mode removes a critical safety feature - use with caution
+
+**Safety Rationale:**
+- Ensures appliance doesn't operate indefinitely without controller supervision
+- Critical for burner systems where loss of communication requires safe shutdown
+- IDLE mode performs proper cooldown if temperature is elevated
+- 30-second default timeout allows for brief disconnections without unnecessary cooldown cycles
 
 ### 0x1F - DISCOVERY_REQUEST
 
@@ -608,18 +666,25 @@ Request device capabilities from all appliances on the bus.
 **Payload:** None (0 bytes)
 
 **Usage:**
-- Controller sends this command with ADDRESS field set to broadcast address (0x0000000000000000)
-- All appliances on the bus MUST respond with DEVICE_ANNOUNCE (0x36)
-- Appliances SHOULD respond immediately (no delay)
+- Controller MUST send this command with ADDRESS field set to broadcast address (0x0000000000000000)
+- Addressed (non-broadcast) DISCOVERY_REQUEST is not supported and SHALL be ignored by appliances
+- All appliances on the bus MUST respond with DEVICE_ANNOUNCE (0x35)
+- Appliances MUST wait a random delay (0-50ms) before responding to avoid bus collisions
 - Response includes device address and capability counts
 
-**Response:** DEVICE_ANNOUNCE (0x36) from each appliance
+**Response:** DEVICE_ANNOUNCE (0x35) from each appliance (after 0-50ms random delay)
 
 **Example Use Cases:**
 - Network discovery on startup
 - Detecting new devices added to the bus
 - Enumerating available resources (motors, sensors, etc.)
 - Building dynamic UI based on available devices
+
+---
+
+## Control Command Formats
+
+**IMPORTANT:** All multi-byte integers (u32, i32, u64, f64) use **little-endian** byte order unless otherwise specified. CRC-16 is the only exception (big-endian).
 
 ### 0x20 - STATE_COMMAND
 
@@ -641,15 +706,39 @@ Set system operating mode.
   - 2 = HEAT_MODE
   - 3 = EMERGENCY
 - **argument** (i32): Mode-specific parameter
-  - FAN_MODE: Target RPM (800-3400)
-  - HEAT_MODE: Pump rate in milliseconds
+  - FAN_MODE: Target RPM (0 or 800-3400). If 0, treated as IDLE_MODE.
+  - HEAT_MODE: Pump rate in milliseconds. If 0, treated as IDLE_MODE. Valid range: (pulse_ms + recovery_ms) to 5000ms (see PUMP_CONFIG).
   - IDLE_MODE/EMERGENCY: Ignored (set to 0)
 
 **Example:** Enter fan mode at 2500 RPM
 ```
-7E 08 [ADDRESS] 20 00 00 00 01 00 00 09 C4 [CRC-H] [CRC-L] 7F
-                ^^mode=1    ^^argument=2500
+7E 08 [ADDRESS] 20 01 00 00 00 C4 09 00 00 [CRC-H] [CRC-L] 7F
+                   ^^mode=1    ^^argument=2500 (little-endian)
 ```
+
+**Mode vs State Distinction:**
+
+Command modes (sent via STATE_COMMAND) trigger state machine transitions but do NOT directly set the state. The appliance state machine determines the actual state based on the requested mode and current conditions.
+
+**Mode → State Mapping:**
+
+| Command Mode | Possible Resulting States | Notes |
+|--------------|---------------------------|-------|
+| IDLE_MODE (0) | IDLE, COOLING | If temperature is elevated, enters COOLING first |
+| FAN_MODE (1) | BLOWING | Direct transition |
+| HEAT_MODE (2) | PREHEAT → PREHEAT_STAGE_2 → HEATING | Progresses through heating sequence |
+| EMERGENCY (3) | E_STOP | Immediate transition, requires power cycle to exit |
+
+**States Not Settable via Command:**
+- INITIALIZING (0): Only occurs during boot
+- ERROR (7): Set by internal fault detection
+
+See STATE_DATA (0x30) for complete list of state values reported by the appliance.
+
+**Validation:**
+- Invalid mode values (>3) MUST return ERROR_INVALID_CMD with code 1
+- For FAN_MODE: argument values between 1 and min_rpm-1 are invalid and MUST return ERROR_INVALID_CMD with code 1 (e.g., 1-799 if min_rpm=800, see MOTOR_CONFIG)
+- For HEAT_MODE: argument values between 1 and (pulse_ms + recovery_ms - 1) are invalid and MUST return ERROR_INVALID_CMD with code 1 (see PUMP_CONFIG)
 
 ### 0x21 - MOTOR_COMMAND
 
@@ -665,12 +754,14 @@ Control motor (fan) speed.
 ```
 
 **Fields:**
-- **motor** (i32): Motor index (0-9, typically 0)
-- **rpm** (i32): Target RPM (0 = stop, 800-3400 = run)
+- **motor** (i32): Motor index (0 to motor_count-1, typically 0)
+- **rpm** (i32): Target RPM (0 = stop, min_rpm to max_rpm = run, typically 800-3400)
 
 **Validation:**
-- RPM MUST be 0 OR within motor's min/max range
-- Invalid RPM MUST return ERROR_INVALID_CMD
+- motor MUST be within device capability (0 to motor_count-1)
+- rpm MUST be 0 OR within motor's configured min/max range (see MOTOR_CONFIG)
+- rpm values between 1 and min_rpm-1 (e.g., 1-799) are INVALID
+- Invalid motor index or rpm MUST return ERROR_INVALID_CMD with code 2 (invalid device index) or code 1 (invalid parameter value)
 
 ### 0x22 - PUMP_COMMAND
 
@@ -686,11 +777,14 @@ Control fuel pump rate.
 ```
 
 **Fields:**
-- **pump** (i32): Pump index (0-9, typically 0)
-- **rate_ms** (i32): Pulse interval in milliseconds (0 = stop, ≥100 = run)
+- **pump** (i32): Pump index (0 to pump_count-1, typically 0)
+- **rate_ms** (i32): Pulse interval in milliseconds (0 = stop, minimum = pulse_ms + recovery_ms, maximum = 5000)
 
 **Validation:**
-- rate_ms MUST be 0 OR ≥ (pulse_ms + recovery_ms)
+- pump MUST be within device capability (0 to pump_count-1)
+- rate_ms MUST be 0 OR within valid range: (pulse_ms + recovery_ms) to 5000ms
+- rate_ms values between 1 and (pulse_ms + recovery_ms - 1) are INVALID
+- Invalid pump index or rate_ms MUST return ERROR_INVALID_CMD with code 2 (invalid device index) or code 1 (invalid parameter value)
 
 ### 0x23 - GLOW_COMMAND
 
@@ -706,38 +800,124 @@ Control glow plug heating.
 ```
 
 **Fields:**
-- **glow** (i32): Glow plug index (0-9, typically 0)
-- **duration** (i32): Burn duration in milliseconds (0 = off, max = configured max_duration)
+- **glow** (i32): Glow plug index (0 to glow_count-1, typically 0)
+- **duration** (i32): Burn duration in milliseconds (0 = immediately extinguish, >0 = light for specified duration, max = configured max_duration)
+
+**Behavior:**
+- The glow plug automatically turns off when the specified duration expires
+- Duration expiry triggers a GLOW_DATA message with lit=0 (see GLOW_DATA)
+- Duration MUST NOT be extended: sending a non-zero duration to an already lit glow plug returns an error
+- Sending duration=0 to a lit glow plug immediately extinguishes it and triggers GLOW_DATA with lit=0
 
 **Validation:**
-- duration MUST be 0 to max_duration
-- MUST NOT re-light already lit glow plug
+- glow MUST be within device capability (0 to glow_count-1); invalid index returns ERROR_INVALID_CMD with code 2
+- duration MUST be 0 to max_duration; invalid value returns ERROR_INVALID_CMD with code 1
+- Attempting to light an already lit glow plug (duration > 0 when lit=1) MUST return:
+  - ERROR_INVALID_CMD with code 1 if sent as a manual command (direct GLOW_COMMAND)
+  - ERROR_STATE_REJECT if the appliance is in HEAT_MODE (state machine controls glow plug)
 
-### 0x24 - TEMP_COMMAND
+### 0x24 - TEMPERATURE_COMMAND
 
 Configure temperature controller operation.
 
 **Payload Structure (20 bytes):**
 ```
 +-------------+------+-------------+------------------+
-| thermometer | type | motor_index | target_temp      |
+| temperature | type | motor_index | target_temperature      |
 +-------------+------+-------------+------------------+
 | i32         | u32  | i32         | f64              |
 +-------------+------+-------------+------------------+
 ```
 
 **Fields:**
-- **thermometer** (i32): Temperature controller index (0-9, typically 0)
+- **temperature** (i32): Temperature sensor index (0 to temperature_count-1, typically 0)
 - **type** (u32): Command type
   - 0 = WATCH_MOTOR (associate with motor)
   - 1 = UNWATCH_MOTOR (stop monitoring)
   - 2 = ENABLE_RPM_CONTROL (enable PID)
   - 3 = DISABLE_RPM_CONTROL (disable PID)
-  - 4 = SET_TARGET_TEMP (set temperature target)
-- **motor_index** (i32): Motor to control (used with WATCH_MOTOR)
-- **target_temp** (f64): Target temperature in Celsius (used with SET_TARGET_TEMP)
+  - 4 = SET_TARGET_TEMPERATURE (set temperature target)
+- **motor_index** (i32): Motor to control (used with WATCH_MOTOR only)
+- **target_temperature** (f64): Target temperature in Celsius (used with SET_TARGET_TEMPERATURE only)
+
+**Unused Field Handling:**
+- Controllers SHOULD set unused fields to zero
+- Appliances MUST ignore unused fields for their respective command types
+- Example: For ENABLE_RPM_CONTROL (type=2), both motor_index and target_temperature are unused and ignored
 
 **Note:** f64 is IEEE 754 double-precision, little-endian byte order
+
+**Validation:**
+- Invalid type values (>4) MUST return ERROR_INVALID_CMD with code 1
+- temperature index MUST be within device capability (0 to temperature_count-1); invalid index returns ERROR_INVALID_CMD with code 2
+- motor_index (for WATCH_MOTOR) MUST be within device capability (0 to motor_count-1); invalid index returns ERROR_INVALID_CMD with code 2
+- target_temperature (for SET_TARGET_TEMPERATURE) MUST NOT be NaN or Infinity; invalid f64 values return ERROR_INVALID_CMD with code 1
+
+**SET_TARGET_TEMPERATURE Restrictions:**
+- SET_TARGET_TEMPERATURE (type=4) MAY only be sent when the appliance is in HEATING state (state=5)
+- Sending SET_TARGET_TEMPERATURE in any other state MUST return ERROR_STATE_REJECT
+- Appliance firmware MUST provide a default target_temperature value (typically 210°C for heat exchanger temperature sensor)
+- The default value is used until the controller sends SET_TARGET_TEMPERATURE
+
+### 0x25 - SEND_TELEMETRY
+
+Request specific telemetry data from an appliance. This command is used in polling mode (when TELEMETRY_CONFIG has interval_ms=0) to explicitly request telemetry data instead of relying on automatic broadcasts.
+
+**Payload Structure (8 bytes):**
+```
++----------------+-------+----------+
+| telemetry_type | index | reserved |
++----------------+-------+----------+
+| u8             | u8    | 6 bytes  |
++----------------+-------+----------+
+```
+
+**Fields:**
+- **telemetry_type** (u8): Type of telemetry data to request
+  - 0 = STATE (request STATE_DATA)
+  - 1 = MOTOR (request MOTOR_DATA)
+  - 2 = TEMPERATURE (request TEMPERATURE_DATA)
+  - 3 = PUMP (request PUMP_DATA)
+  - 4 = GLOW (request GLOW_DATA)
+- **index** (u8): Peripheral index to request
+  - 0 to (peripheral_count-1) = Request data for specific peripheral at this index
+  - 0xFF (255) = Request data for ALL peripherals of the specified type
+  - For STATE (type=0): index is ignored; controllers SHOULD send 0
+- **reserved** (6 bytes): Reserved for future use; controllers SHOULD send zeros, appliances MUST ignore this field
+
+**Behavior:**
+
+When an appliance receives SEND_TELEMETRY:
+1. If telemetry is disabled or in broadcast mode, the command MUST be ignored (takes precedence over all other checks)
+2. If telemetry_type is invalid (>4), appliance SHALL respond with ERROR_INVALID_CMD
+3. If telemetry_type is STATE (0), index is ignored and appliance SHALL send exactly one STATE_DATA message
+4. For other telemetry types: if index is out of range for the device (e.g., index=2 but device has only 1 motor) and index is not 0xFF, appliance SHALL respond with ERROR_INVALID_CMD
+5. If index=0xFF, appliance SHALL send one data message per peripheral of the specified type
+6. If index is valid (0 to peripheral_count-1), appliance SHALL send exactly one data message for that peripheral
+
+**Response Messages:**
+- STATE (0): STATE_DATA (0x30) - always exactly one message
+- MOTOR (1): MOTOR_DATA (0x31) - one per motor if index=0xFF
+- TEMPERATURE (2): TEMPERATURE_DATA (0x34) - one per temperature sensor if index=0xFF
+- PUMP (3): PUMP_DATA (0x32) - one per pump if index=0xFF
+- GLOW (4): GLOW_DATA (0x33) - one per glow plug if index=0xFF
+
+**Example Usage:**
+```
+Controller → Appliance:  SEND_TELEMETRY (type=1, index=0xFF)  # Request all motors
+Appliance → Controller:  MOTOR_DATA (index=0, rpm=2500, ...)
+Appliance → Controller:  MOTOR_DATA (index=1, rpm=2480, ...)
+
+Controller → Appliance:  SEND_TELEMETRY (type=2, index=0)   # Request temperature sensor 0
+Appliance → Controller:  TEMPERATURE_DATA (index=0, reading=225.5, ...)
+```
+
+**Notes:**
+- SEND_TELEMETRY does NOT reset the communication timeout timer (only PING_REQUEST does)
+- This command is only meaningful when telemetry is in polling mode (interval_ms=0)
+- If telemetry is disabled (telemetry_enabled=0), this command MUST be ignored
+- If telemetry is in automatic broadcast mode (interval_ms>0), this command MUST be ignored
+- **Rationale:** Silent ignore (no error response) prevents excess bus chatter and avoids collisions in multi-device networks
 
 ### 0x2F - PING_REQUEST
 
@@ -747,7 +927,7 @@ Connectivity check / heartbeat.
 
 **Response:** PING_RESPONSE (0x3F) with uptime
 
-**Important:** PING_REQUEST resets the telemetry timeout timer. If telemetry is enabled and no PING_REQUEST is received for 30 seconds, telemetry broadcasts SHALL be automatically disabled.
+**Important:** PING_REQUEST resets the communication timeout timer. If timeout mode is enabled (see TIMEOUT_CONFIG) and no PING_REQUEST is received within the configured timeout interval (default 30 seconds), the appliance SHALL automatically transition to IDLE mode and disable telemetry broadcasts.
 
 ---
 
@@ -770,8 +950,8 @@ System state and error status.
 
 **Fields:**
 - **error** (u8): Error flag (0 = no error, 1 = error)
-- **code** (i32): Error code (application-specific)
-- **state** (u32): Current system state
+- **code** (i32): Error code (see table below)
+- **state** (u32): Current system state (state machine state, not command mode)
   - 0 = INITIALIZING
   - 1 = IDLE
   - 2 = BLOWING
@@ -783,6 +963,27 @@ System state and error status.
   - 8 = E_STOP
 - **timestamp** (u32): Timestamp in milliseconds since boot (wraps at 2^32)
 - **padding** (3 bytes): Reserved for alignment
+
+**Note:** State values represent internal state machine states, which differ from the command modes sent via STATE_COMMAND (0x20). A single command mode may result in multiple state transitions (e.g., HEAT_MODE → PREHEAT → PREHEAT_STAGE_2 → HEATING). See STATE_COMMAND for mode-to-state mapping.
+
+**Standard Error Codes:**
+
+| Code | Name | Description |
+|------|------|-------------|
+| 0 | NONE | No error |
+| 1 | OVERHEAT | Temperature exceeded safety limit |
+| 2 | SENSOR_FAULT | Temperature sensor failure or invalid reading |
+| 3 | IGNITION_FAIL | Failed to ignite after preheat phase |
+| 4 | FLAME_OUT | Flame detected during heating but subsequently lost |
+| 5 | MOTOR_STALL | Motor RPM dropped below minimum threshold |
+| 6 | PUMP_FAULT | Pump operation failure |
+| 7 | COMMANDED_ESTOP | Emergency stop commanded by controller (via STATE_COMMAND mode=EMERGENCY) |
+
+**Note:** Communication timeout is not an error code. When communication is lost, the appliance automatically transitions to IDLE mode (see TIMEOUT_CONFIG). Codes 8-255 are reserved for future use. Negative codes (i32 < 0) may be used for application-specific errors.
+
+**Error Flag and Code Relationship:**
+- Appliances MUST NOT send a code other than 0 when the error flag is 0
+- Controllers SHOULD ignore the error code unless the error flag is set (error=1)
 
 **Send Rate:** 2.5× telemetry interval (250ms at default 100ms interval)
 
@@ -861,177 +1062,57 @@ Glow plug status.
 
 **Send Rate:** On event (on/off transitions)
 
-### 0x34 - TEMP_DATA
+**Events that trigger GLOW_DATA:**
+- Glow plug turns on (GLOW_COMMAND with duration > 0): sends lit=1
+- Glow plug turns off via command (GLOW_COMMAND with duration=0): sends lit=0
+- Glow plug turns off automatically (duration expired): sends lit=0
+
+### 0x34 - TEMPERATURE_DATA
 
 Temperature sensor readings and PID control status.
 
 **Payload Structure (32 bytes):**
 ```
-+-------------+-----------+------+-------------+-------------------+
-| thermometer | timestamp | temp | pid_enabled | rpm_ctrl_enabled  |
-+-------------+-----------+------+-------------+-------------------+
-| i32         | u32       | f64  | u8          | u8                |
-+-------------+-----------+------+-------------+-------------------+
++-------------+-----------+---------+------------------+
+| temperature | timestamp | reading | ctrl_rpm_by_temperature |
++-------------+-----------+---------+------------------+
+| i32         | u32       | f64     | u8               |
++-------------+-----------+---------+------------------+
 
-+---------------+-----------------+---------+
-| watched_motor | target_temp     | padding |
-+---------------+-----------------+---------+
-| i32           | f64             | 2 bytes |
-+---------------+-----------------+---------+
++---------------+--------------------+---------+
+| watched_motor | target_temperature | padding |
++---------------+--------------------+---------+
+| i32           | f64                | 3 bytes |
++---------------+--------------------+---------+
 ```
 
 **Fields:**
-- **thermometer** (i32): Thermometer index
+- **temperature** (i32): Temperature sensor index
 - **timestamp** (u32): Reading timestamp in milliseconds since boot
-- **temp** (f64): Temperature in Celsius
-- **pid_enabled** (u8): PID active flag (0 = off, 1 = on)
-- **rpm_ctrl_enabled** (u8): Motor RPM control flag (0 = off, 1 = on)
-- **watched_motor** (i32): Motor being controlled (-1 = none)
-- **target_temp** (f64): Target temperature for PID control
-- **padding** (2 bytes): Reserved for alignment
+- **reading** (f64): Current temperature reading in Celsius
+- **ctrl_rpm_by_temperature** (u8): Temperature-based RPM control active (0 = off, 1 = on)
+- **watched_motor** (i32): Motor being controlled (-1 = none, or last configured motor index when ctrl_rpm_by_temperature=0)
+- **target_temperature** (f64): Target temperature for PID control (firmware default value until SET_TARGET_TEMPERATURE received)
+- **padding** (3 bytes): Reserved for alignment
 
 **Send Rate:** Per telemetry interval (100ms at default, after sample warmup period)
 
-### 0x35 - TELEMETRY_BUNDLE
+**Invalid Reading Handling:**
+- If the temperature sensor returns an invalid value (NaN, Infinity, or sensor fault), the appliance MUST NOT transmit invalid f64 values
+- Instead, the appliance MUST transition to ERROR state and send STATE_DATA with error code SENSOR_FAULT (2)
+- This applies to all f64 temperature fields (reading, target_temperature)
 
-Consolidated telemetry packet for efficient polling with support for multiple motors and temperature sensors.
-
-**Payload Structure (Variable: 42-108 bytes):**
-```
-+-------+-------+-------------+------------+
-| state | error | motor_count | temp_count |
-+-------+-------+-------------+------------+
-| u32   | u8    | u8          | u8         |
-+-------+-------+-------------+------------+
-
-+----------+--------+------+------------+
-| For each motor (motor_count × 16 bytes):
-+----------+--------+------+------------+
-| rpm      | target | pwm  | pwm_period |
-+----------+--------+------+------------+
-| i32      | i32    | i32  | i32        |
-+----------+--------+------+------------+
-
-+------+
-| For each temperature sensor (temp_count × 8 bytes):
-+------+
-| temp |
-+------+
-| f64  |
-+------+
-
-+-----------+-----------+--------------+----------------+
-| pump_rate | glow_st   | timestamp    | pid_enabled    |
-+-----------+-----------+--------------+----------------+
-| i32       | u8        | u32          | u8             |
-+-----------+-----------+--------------+----------------+
-
-+----------------+---------+
-| rpm_ctrl_en    | padding |
-+----------------+---------+
-| u8             | 1 byte  |
-+----------------+---------+
-```
-
-**Fields:**
-- **state** (u32): Current system state (see STATE_DATA)
-- **error** (u8): Error flag
-- **motor_count** (u8): Number of motors in this bundle (1-3)
-- **temp_count** (u8): Number of temperature sensors in this bundle (1-3)
-- **motors[motor_count]**: Array of motor telemetry entries
-  - **rpm** (i32): Current motor RPM
-  - **target** (i32): Target motor RPM
-  - **pwm** (i32): Motor PWM pulse width in microseconds
-  - **pwm_period** (i32): PWM period in microseconds (for percentage calculation: pwm/pwm_period × 100)
-- **temperatures[temp_count]**: Array of temperature readings
-  - **temp** (f64): Temperature in Celsius
-- **pump_rate** (i32): Current pump rate in milliseconds
-- **glow_status** (u8): Glow plug lit status
-- **timestamp** (u32): Bundle timestamp in milliseconds since boot
-- **pid_enabled** (u8): Temperature PID active
-- **rpm_ctrl_enabled** (u8): Motor RPM control active
-- **padding** (1 byte): Reserved for alignment
-
-**Payload Size Calculation:**
-```
-Size = 7 (header) + (motor_count × 16) + (temp_count × 8) + 11 (footer)
-```
-
-**Common Configurations:**
-
-| Motors | Temps | Payload Size | Status | Notes |
-|--------|-------|--------------|--------|-------|
-| 1 | 1 | 7 + 16 + 8 + 11 = 42 bytes | ✓ Valid | **Typical** (most common) |
-| 2 | 1 | 7 + 32 + 8 + 11 = 58 bytes | ✓ Valid | |
-| 3 | 1 | 7 + 48 + 8 + 11 = 74 bytes | ✓ Valid | |
-| 1 | 2 | 7 + 16 + 16 + 11 = 50 bytes | ✓ Valid | |
-| 2 | 2 | 7 + 32 + 16 + 11 = 66 bytes | ✓ Valid | |
-| 3 | 2 | 7 + 48 + 16 + 11 = 82 bytes | ✓ Valid | |
-| 1 | 3 | 7 + 16 + 24 + 11 = 58 bytes | ✓ Valid | |
-| 2 | 3 | 7 + 32 + 24 + 11 = 74 bytes | ✓ Valid | |
-| 3 | 3 | 7 + 48 + 24 + 11 = 90 bytes | ✓ Valid | |
-| 4 | 3 | 7 + 64 + 24 + 11 = 106 bytes | ✓ Valid | |
-| 3 | 4 | 7 + 48 + 32 + 11 = 98 bytes | ✓ Valid | |
-| 5 | 3 | 7 + 80 + 24 + 11 = 122 bytes | ✗ Exceeds 114-byte limit | |
-
-**Maximum Payload Constraint:** 114 bytes (to fit within 128-byte packet with framing and address)
-
-**Purpose:** Single packet containing all critical telemetry for efficient monitoring. Supports variable number of motors and temperature sensors for different appliance configurations.
-
-**Send Rate:** Per telemetry interval (100ms at default)
-
-**Validation:**
-
-When encoding or decoding TELEMETRY_BUNDLE, implementations MUST validate:
-
-1. **Count Field Ranges:**
-   - motor_count MUST be in range [1, 5]
-   - temp_count MUST be in range [1, 4]
-   - motor_count = 0 OR temp_count = 0 is INVALID (use individual messages or omit telemetry)
-   - Implementations SHOULD reject bundles with count values outside these ranges
-
-2. **Payload Size Constraint:**
-   - Total payload MUST NOT exceed 114 bytes (maximum allowed by protocol)
-   - Calculated size = 7 + (motor_count × 16) + (temp_count × 8) + 11
-   - If calculated size > 114 bytes:
-     - Appliance MUST NOT send TELEMETRY_BUNDLE
-     - Appliance MUST use individual messages (MOTOR_DATA, TEMP_DATA) instead
-     - Controller MUST reject bundles exceeding size limit with ERROR_INVALID_MSG
-
-3. **Device Capability Mismatch:**
-   - If motor_count > actual motors available on appliance:
-     - Appliance MAY pad with dummy motor data (rpm=0, target=0, pwm=0)
-     - Appliance SHOULD only include actual motors in bundle
-   - If temp_count > actual temperature sensors:
-     - Appliance MAY pad with dummy temperature data (temp=0.0)
-     - Appliance SHOULD only include actual sensors in bundle
-   - Controllers SHOULD verify counts against DEVICE_ANNOUNCE capabilities
-   - Controllers MAY ignore extra motors/temperatures beyond announced capabilities
-
-4. **Array Parsing:**
-   - Receivers MUST read motor_count and temp_count BEFORE parsing arrays
-   - Receivers MUST validate that received payload size matches calculated size
-   - Receivers MUST reject bundles where payload size ≠ expected size
-
-**Notes:**
-- Arrays are variable-length based on motor_count and temp_count fields
-- Receivers MUST parse both count fields to determine array sizes
-- Motor/temperature indices are implicit (array order: 0, 1, 2...)
-- For configurations exceeding size limit, MUST use individual messages (MOTOR_DATA, TEMP_DATA) instead
-- **Typical configuration:** 1 motor + 1 temperature (42 bytes) - most common appliance setup
-- Multi-appliance configurations may use 2-3 motors/temps for expanded capabilities
-
-### 0x36 - DEVICE_ANNOUNCE
+### 0x35 - DEVICE_ANNOUNCE
 
 Device capabilities announcement sent in response to DISCOVERY_REQUEST.
 
 **Payload Structure (8 bytes):**
 ```
-+-------------+------------------+------------+------------+
-| motor_count | thermometer_count | pump_count | glow_count |
-+-------------+------------------+------------+------------+
-| u8          | u8               | u8         | u8         |
-+-------------+------------------+------------+------------+
++-------------+-------------------+------------+------------+
+| motor_count | temperature_count | pump_count | glow_count |
++-------------+-------------------+------------+------------+
+| u8          | u8                | u8         | u8         |
++-------------+-------------------+------------+------------+
 
 +---------+
 | padding |
@@ -1041,26 +1122,33 @@ Device capabilities announcement sent in response to DISCOVERY_REQUEST.
 ```
 
 **Fields:**
-- **motor_count** (u8): Number of motors this device has (0-255)
-- **thermometer_count** (u8): Number of temperature sensors (0-255)
-- **pump_count** (u8): Number of pumps (0-255)
-- **glow_count** (u8): Number of glow plugs (0-255)
+- **motor_count** (u8): Number of motors this device has (1-255)
+- **temperature_count** (u8): Number of temperature sensors (1-255)
+- **pump_count** (u8): Number of pumps (1-255)
+- **glow_count** (u8): Number of glow plugs (1-255)
 - **padding** (4 bytes): Reserved for future expansion (firmware version, device type, etc.)
+
+**Validation:**
+- All counts MUST be in range [1, 255]
+- Implementations MUST reject DEVICE_ANNOUNCE with any count equal to 0:
+  - Controllers with a UI SHOULD display a diagnostic message to the user
+  - Routers MUST forward the packet to subscribed controllers (allowing them to display diagnostics)
+  - The packet MUST NOT be used for device enumeration
 
 **Send Rate:** On DISCOVERY_REQUEST only
 
 **Behavior:**
 - Sent in response to DISCOVERY_REQUEST with broadcast address
 - ADDRESS field contains the appliance's unique 64-bit address
-- Appliances SHOULD respond immediately (no artificial delay)
-- Multiple appliances may respond simultaneously (acceptable bus contention)
+- Appliances MUST wait a random delay (0-50ms) before responding to avoid bus collisions
+- Controllers MUST wait at least 100ms (preferably 200ms) to receive all responses
 - Controllers SHOULD be prepared to receive multiple DEVICE_ANNOUNCE messages
 
 **Example:**
 ```
 Typical appliance (Helios ICU) responds with:
   motor_count: 1
-  thermometer_count: 1
+  temperature_count: 1
   pump_count: 1
   glow_count: 1
 
@@ -1068,7 +1156,7 @@ Typical appliance (Helios ICU) responds with:
 
 Multi-burner appliance responds with:
   motor_count: 3
-  thermometer_count: 3
+  temperature_count: 3
   pump_count: 2
   glow_count: 2
 
@@ -1112,38 +1200,35 @@ All error messages share the same structure:
 +------------+
 | error_code |
 +------------+
-| u32        |
+| i32        |
 +------------+
 ```
 
-### 0xE0 - ERROR_INVALID_MSG
-Invalid message format or framing error.
-
-**error_code:**
-- 0 = Invalid START byte
-- 1 = Invalid END byte
-- 2 = Length exceeds maximum
-- 3 = Timeout waiting for complete packet
-
-### 0xE1 - ERROR_CRC_FAIL
-CRC validation failed.
-
-**error_code:**
-- Expected CRC value (lower 16 bits)
-
-### 0xE2 - ERROR_INVALID_CMD
+### 0xE0 - ERROR_INVALID_CMD
 Command validation failed.
 
+**Direction:** Appliance → Controller
+
 **error_code:**
-- 0 = Unknown message type
+- 0 = Reserved for future use
 - 1 = Invalid parameter value
 - 2 = Invalid device index
 
-### 0xE3 - ERROR_STATE_REJECT
-Command rejected by state machine.
+**ADDRESS field:** Appliance's own address (source)
+
+### 0xE1 - ERROR_STATE_REJECT
+Command rejected by appliance state machine.
+
+**Direction:** Appliance → Controller
 
 **error_code:**
-- Current state that rejected the command
+- Current state that rejected the command (see STATE_DATA state values)
+
+**ADDRESS field:** Appliance's own address (source)
+
+**Recovery:** Controllers should handle ERROR_STATE_REJECT by either:
+- Waiting for the appliance to reach an appropriate state, or
+- Retrying the command after addressing the state conflict
 
 ---
 
@@ -1160,39 +1245,47 @@ Appliance → Controller:  (Success: no response)
                          [ERROR_INVALID_CMD: Invalid parameter]
 ```
 
+**Command Acknowledgment Philosophy:**
+
+The protocol does NOT use explicit ACK/NACK messages for successful commands. Instead:
+
+- **Configuration commands** (MOTOR_CONFIG, PUMP_CONFIG, etc.): Controllers should maintain the desired configuration state and periodically send commands to reconcile any differences. This provides built-in retry capability without explicit acknowledgments.
+
+- **Control commands** (STATE_COMMAND, MOTOR_COMMAND, etc.): Success is inferred from subsequent telemetry (e.g., STATE_DATA shows expected state, MOTOR_DATA shows expected RPM).
+
+- **Error responses**: Only sent when a command is explicitly rejected. Absence of an error response does NOT guarantee the command was received or applied.
+
+**Rationale:** This approach simplifies implementation, reduces protocol overhead, and provides natural resilience to packet loss through periodic state reconciliation.
+
 ### 2. Periodic Telemetry
 
 Appliance broadcasts telemetry at fixed intervals **when enabled by controller:**
 
 ```
-Controller → Appliance:  TELEMETRY_CONFIG (enable=1, interval_ms=100, mode=0)
+Controller → Appliance:  TELEMETRY_CONFIG (enable=1, interval_ms=100)
 
 [After enabling, appliance broadcasts at configured interval:]
 
-Bundled Mode (mode=0, default):
-  Every <interval_ms>:      TELEMETRY_BUNDLE (consolidated data)
+  Every <interval_ms>:      MOTOR_DATA (per motor) + TEMPERATURE_DATA (per sensor)
   Every <interval_ms×2.5>:  STATE_DATA
 
-Individual Mode (mode=1):
-  Every <interval_ms>:      MOTOR_DATA + TEMP_DATA
-  Every <interval_ms×2.5>:  STATE_DATA
-
-Example at 100ms interval, bundled mode (recommended):
-  TELEMETRY_BUNDLE every 100ms
+Example at 100ms interval:
+  MOTOR_DATA + TEMPERATURE_DATA every 100ms
   STATE_DATA every 250ms
 
-Example at 500ms interval, individual mode (lower bandwidth):
-  MOTOR_DATA + TEMP_DATA every 500ms
+Example at 500ms interval (lower bandwidth):
+  MOTOR_DATA + TEMPERATURE_DATA every 500ms
   STATE_DATA every 1250ms
+
+For appliances with multiple motors/sensors, separate messages are sent for each.
 ```
 
 **Important:**
 - Telemetry is **disabled by default** on boot
 - Controller MUST explicitly enable telemetry with TELEMETRY_CONFIG command
-- **No data messages (except PING_RESPONSE) SHALL be sent until telemetry is enabled**
-- Telemetry SHALL auto-disable after 30 seconds without PING_REQUEST
+- **No data messages (except PING_RESPONSE and E_STOP broadcasts) SHALL be sent until telemetry is enabled** (see "Emergency Stop Behavior" for E_STOP transmission rules)
+- Telemetry auto-disables when communication timeout elapses (see TIMEOUT_CONFIG)
 - This prevents boot synchronization issues and reduces unnecessary traffic
-- SHOULD use bundled mode (default) for efficiency; MAY use individual mode for flexibility
 
 ### 3. Event-Driven Updates
 
@@ -1203,7 +1296,7 @@ PUMP_DATA:  Sent on pump cycle events
 GLOW_DATA:  Sent when glow plug turns on/off
 ```
 
-**Note:** Event-driven messages SHALL only be sent when telemetry is enabled (telemetry_enabled=1). They are independent of the telemetry_mode setting and SHALL be sent when their events occur.
+**Note:** Event-driven messages SHALL only be sent when telemetry is enabled (telemetry_enabled=1). They SHALL be sent when their events occur. In polling mode (interval_ms=0), event-driven messages are NOT sent automatically; controllers must use SEND_TELEMETRY to explicitly request PUMP_DATA and GLOW_DATA.
 
 ### 4. Heartbeat
 
@@ -1226,7 +1319,7 @@ Appliances automatically transition to IDLE mode and disable telemetry if commun
 - Prevents continued operation without controller supervision
 - **Enabled by default** for safety
 
-**Default Timeout:** 30 seconds (configurable via firmware)
+**Default Timeout:** 30 seconds (configurable via TIMEOUT_CONFIG command, see Configuration Commands)
 
 **Behavior:**
 ```
@@ -1236,16 +1329,15 @@ Normal operation:
   Appliance → Controller:  [Telemetry broadcasts continue if enabled]
 
 Timeout condition:
-  [30 seconds with no PING_REQUEST]
+  [Configured timeout elapses with no PING_REQUEST]
   Appliance: Automatically transitions to IDLE mode
   Appliance: Automatically disables telemetry broadcasts
-  Appliance → Controller: STATE_DATA (state = IDLE, error = timeout) [final message]
   [No further telemetry until controller re-enables]
 ```
 
 **Configuration:**
 - Timeout mode MUST be **enabled by default**
-- Timeout interval is configurable via firmware (default: 30000ms)
+- Timeout interval default: 30000ms (configurable via TIMEOUT_CONFIG command)
 - RECOMMENDED ping interval: 10000-15000ms (well below timeout)
 
 **Safety Rationale:**
@@ -1310,15 +1402,14 @@ Remote controller subscribes to telemetry from appliance through router:
    MSG_TYPE: DATA_SUBSCRIPTION (0x14)
    ADDRESS: Router controller address
    appliance_address: Appliance address
-   message_filter: 0xFFFFFFFF (all data)
 
 2. Router Controller processes subscription:
    - Adds Remote Controller to routing table for Appliance
    - Notes subscription came via WiFi physical layer
 
 3. Appliance sends telemetry (via LIN):
-   MSG_TYPE: TELEMETRY_BUNDLE (0x35)
-   ADDRESS: Router controller address (or broadcast)
+   MSG_TYPE: MOTOR_DATA, TEMPERATURE_DATA, STATE_DATA (0x30-0x34)
+   ADDRESS: Appliance's own address (source)
 
 4. Router Controller receives telemetry:
    - Processes locally if needed
@@ -1332,10 +1423,10 @@ Remote controller subscribes to telemetry from appliance through router:
 
 Router controllers maintain subscription table:
 
-| Subscriber Address | Appliance Address | Message Filter | Physical Layer | Last Activity |
-|--------------------|-------------------|----------------|----------------|---------------|
-| 0x1234567890ABCDEF | 0xFEDCBA0987654321 | 0xFFFFFFFF | WiFi | 2026-01-05 14:23:10 |
-| 0xABCDEF1234567890 | 0xFEDCBA0987654321 | 0x00000020 | Bluetooth | 2026-01-05 14:22:45 |
+| Subscriber Connection | Appliance Address | Physical Layer | Last Activity |
+|-----------------------|-------------------|----------------|---------------|
+| WiFi connection #1 | 0xFEDCBA0987654321 | WiFi | 2026-01-05 14:23:10 |
+| BT connection #2 | 0xFEDCBA0987654321 | Bluetooth | 2026-01-05 14:22:45 |
 
 **ADDRESS Field Usage in Routed Packets:**
 
@@ -1373,11 +1464,10 @@ When a router controller forwards packets between physical layers, the ADDRESS f
 3. **Data Forwarding:**
    - When router receives data message (0x30-0x3F):
    - Check subscription table for matching appliance_address
-   - For each subscriber, check message_filter bitmask
-   - If message type matches filter, forward copy to subscriber's physical layer
+   - Forward copy of ALL data messages to each subscribed connection
 
 4. **Subscription Timeout:**
-   - Router SHOULD remove subscriptions after 60 seconds without PING_REQUEST from subscriber
+   - Router SHOULD remove subscriptions after 60 seconds without PING_RESPONSE from subscriber
    - This prevents stale routing table entries for disconnected controllers
 
 5. **Loop Prevention:**
@@ -1391,7 +1481,7 @@ User wants to control their heater from a phone app:
 1. **Setup:**
    - Appliance: Helios burner ICU (LIN bus, address 0xAABBCCDDEEFF0011)
    - Router: Slate controller (WiFi + LIN, address 0x1122334455667788)
-   - Remote: Phone app with WiFi controller (address 0x99887766554433 22)
+   - Remote: Phone app with WiFi controller (address 0x9988776655443322)
 
 2. **Connection:**
    - Phone app connects to Router via WiFi
@@ -1404,7 +1494,7 @@ User wants to control their heater from a phone app:
    - Appliance starts heating
 
 4. **Monitoring:**
-   - Appliance sends TELEMETRY_BUNDLE every 500ms to Router via LIN
+   - Appliance sends telemetry (MOTOR_DATA, TEMPERATURE_DATA, STATE_DATA) every 500ms to Router via LIN
    - Router checks subscription table, sees Phone app is subscribed
    - Router forwards telemetry to Phone app via WiFi
    - Phone app displays temperature, RPM, state in real-time
@@ -1429,9 +1519,12 @@ User wants to control their heater from a phone app:
 
 All multi-byte integers MUST use **little-endian** byte order.
 
+All payload structures MUST be explicitly **packed** (no padding between fields). Implementations MUST use compiler-specific attributes (e.g., `__attribute__((packed))` in GCC/Clang, `#pragma pack(1)` in MSVC) to ensure correct wire format.
+
 | Type | Size | Format | Range |
 |------|------|--------|-------|
 | u8   | 1 byte | Unsigned integer | 0 to 255 |
+| i8   | 1 byte | Signed integer | -128 to 127 |
 | i32  | 4 bytes | Signed integer (LE) | -2^31 to 2^31-1 |
 | u32  | 4 bytes | Unsigned integer (LE) | 0 to 2^32-1 |
 | u64  | 8 bytes | Unsigned integer (LE) | 0 to 2^64-1 |
@@ -1457,7 +1550,7 @@ Little-endian (wire):  F0 DE BC 9A 78 56 34 12
 
 - **Baud Rate:**
   - **Production (LIN):** 19200 baud (default, via UART-to-LIN transceiver)
-  - **Production (RS-485):** 115200 baud (less common, multi-wire installations)
+  - **Production (RS-485):** 115200 baud (upgraded heaters, multi-wire/multi-heater installations)
   - **Development (UART):** 115200 baud (prototyping only)
 - **Data Bits:** MUST be 8
 - **Parity:** MUST be None
@@ -1471,6 +1564,12 @@ Little-endian (wire):  F0 DE BC 9A 78 56 34 12
 **Receive Buffer:** MUST be minimum 256 bytes (2x max packet size for byte stuffing)
 **Transmit Buffer:** MUST be minimum 256 bytes (2x max packet size for byte stuffing)
 
+### Inter-Byte Timeout
+
+**All implementations MUST discard partial packets after 100ms of silence (no bytes received).**
+
+This timeout ensures that incomplete packets due to transmission errors, disconnections, or noise do not permanently block the decoder. When the timeout elapses mid-packet, the receiver resets to searching for a new START byte.
+
 ### Protocol Behavior
 
 These requirements apply to all implementations unless otherwise noted.
@@ -1479,7 +1578,8 @@ These requirements apply to all implementations unless otherwise noted.
 
 **Appliances MUST NOT transmit data messages (0x30-0x3F) unless:**
 - Responding to a PING_REQUEST with PING_RESPONSE, OR
-- Telemetry broadcasting has been enabled via TELEMETRY_CONFIG command
+- Telemetry broadcasting has been enabled via TELEMETRY_CONFIG command, OR
+- Appliance is in E_STOP state (see "Emergency Stop Behavior (Appliances Only)" below)
 
 **Rationale:** This prevents boot synchronization errors by ensuring the controller is ready to receive data before the appliance begins broadcasting.
 
@@ -1498,6 +1598,15 @@ These requirements apply to all implementations unless otherwise noted.
 - Continue until valid packet received or error occurs
 
 **Error Recovery:**
+- **START byte (0x7E) received mid-packet:**
+  - Abandon current packet immediately
+  - Treat the new START byte as beginning of a new packet
+  - Log error if applicable (indicates previous packet was corrupted or incomplete)
+- **LENGTH field exceeds maximum payload (>114):**
+  - Immediately reject the packet when invalid LENGTH byte is received
+  - Reset receive buffer
+  - Discard all bytes until next START byte detected
+  - Log error if applicable
 - **Packet exceeds maximum length (128 bytes):**
   - Reset receive buffer immediately
   - Discard all bytes until next START byte detected
@@ -1512,7 +1621,7 @@ These requirements apply to all implementations unless otherwise noted.
 
 **When a controller transmits STATE_COMMAND with mode=EMERGENCY to an appliance, it MUST:**
 - Retransmit the EMERGENCY command every 250ms
-- Continue retransmitting until TELEMETRY_BUNDLE received with state = E_STOP (0x08)
+- Continue retransmitting until STATE_DATA received with state = E_STOP (0x08)
 - Once emergency stop confirmed, stop retransmitting command
 
 **Rationale:** This ensures emergency stop is reliably entered even if the initial command is lost or corrupted, providing safety-critical reliability for emergency stop activation.
@@ -1523,27 +1632,28 @@ Controller sends: STATE_COMMAND (mode=EMERGENCY)
 Controller starts: Retransmitting EMERGENCY every 250ms
 Appliance receives: STATE_COMMAND (mode=EMERGENCY)
 Appliance enters: E_STOP state
-Appliance begins: Broadcasting TELEMETRY_BUNDLE every 250ms
-Controller receives: TELEMETRY_BUNDLE (state=E_STOP, ...)
+Appliance begins: Broadcasting all telemetry (STATE_DATA, MOTOR_DATA, TEMPERATURE_DATA, PUMP_DATA, GLOW_DATA) every 250ms
+Controller receives: STATE_DATA (state=E_STOP, error=1, code=...)
 Controller stops: Retransmitting EMERGENCY command
-Controller continues: Receiving TELEMETRY_BUNDLE every 250ms
+Controller continues: Receiving telemetry every 250ms
 ... continues until power cycle ...
 ```
 
 #### Emergency Stop Behavior (Appliances Only)
 
 **When an appliance enters an emergency stop state, it MUST:**
-- Ignore ALL received commands, including PING_REQUEST
-- Transmit TELEMETRY_BUNDLE indicating emergency stop every 250ms
+- Ignore ALL received commands, including PING_REQUEST and SEND_TELEMETRY
+- Transmit STATE_DATA, MOTOR_DATA, TEMPERATURE_DATA, PUMP_DATA, and GLOW_DATA every 250ms
 - Continue emergency stop broadcasts until power cycle or hardware reset
 
 **Rationale:** Emergency stop is a safety-critical state that requires immediate visibility to the controller and prevents any command processing that could interfere with safe shutdown.
 
 **Transmission During Emergency Stop:**
-- MUST transmit TELEMETRY_BUNDLE with state = E_STOP (0x08)
-- Includes all sensor data (motor, temperature, etc.) for diagnostics
+- MUST transmit STATE_DATA with state = E_STOP (0x08) and appropriate error code
+- MUST transmit MOTOR_DATA, TEMPERATURE_DATA, PUMP_DATA, and GLOW_DATA for diagnostics
 - Broadcast interval: 250ms (fixed, not configurable)
 - Broadcasts occur regardless of TELEMETRY_CONFIG state
+- For multi-device appliances: all messages (one per motor, one per sensor, etc.) MUST be sent as a burst at the start of each 250ms interval
 
 **Recovery:**
 - Emergency stop state can ONLY be cleared by:
@@ -1555,10 +1665,12 @@ Controller continues: Receiving TELEMETRY_BUNDLE every 250ms
 ```
 Appliance detects fault temperature (>275°C)
 Appliance enters: E_STOP state
-Appliance begins: Broadcasting TELEMETRY_BUNDLE every 250ms
+Appliance begins: Broadcasting all telemetry (STATE_DATA, MOTOR_DATA, TEMPERATURE_DATA, PUMP_DATA, GLOW_DATA) every 250ms
 Controller sends: PING_REQUEST (ignored by appliance)
 Controller sends: STATE_COMMAND(IDLE) (ignored by appliance)
-Controller receives: TELEMETRY_BUNDLE (state=E_STOP, error=OVERHEAT, temp=280°C, ...) every 250ms
+Controller receives: STATE_DATA (state=E_STOP, error=1, code=OVERHEAT) every 250ms
+Controller receives: TEMPERATURE_DATA (temperature=280°C, ...) every 250ms
+Controller receives: MOTOR_DATA, PUMP_DATA, GLOW_DATA every 250ms
 ... continues until power cycle ...
 ```
 
@@ -1577,19 +1689,20 @@ Controller receives: TELEMETRY_BUNDLE (state=E_STOP, error=OVERHEAT, temp=280°C
 - On each PING_RESPONSE:
   - If broadcast enabled but no data received → retransmit enable command
   - If broadcast data received → no action needed (working correctly)
-- Continue retrying until broadcast data is confirmed
+- Continue retrying indefinitely until broadcast data is confirmed
+- There is NO retry limit - if an appliance only responds to pings but never sends telemetry, it should be considered inoperative
 
 **Example:**
 ```
 Controller sends: TELEMETRY_CONFIG (enabled=true, interval=100ms)
 Controller receives: PING_RESPONSE (uptime=5000ms)
-Controller checks: Have we received TELEMETRY_BUNDLE? NO
+Controller checks: Have we received telemetry data? NO
 Controller action: Retransmit TELEMETRY_CONFIG
 Controller receives: PING_RESPONSE (uptime=15000ms)
-Controller checks: Have we received TELEMETRY_BUNDLE? NO
+Controller checks: Have we received telemetry data? NO
 Controller action: Retransmit TELEMETRY_CONFIG
-Controller receives: TELEMETRY_BUNDLE (state=HEATING, ...)
-Controller checks: Have we received TELEMETRY_BUNDLE? YES
+Controller receives: MOTOR_DATA (rpm=2500, ...)
+Controller checks: Have we received telemetry data? YES
 Controller action: Stop retrying, broadcasts working
 ```
 
@@ -1602,14 +1715,15 @@ Controller action: Stop retrying, broadcasts working
 - **UART Error:** Log error, attempt retransmit once
 
 ### Receive Errors
-- **CRC Failure:** Send ERROR_CRC_FAIL, discard packet
-- **Framing Error:** Send ERROR_INVALID_MSG, resync to next START byte
+- **CRC Failure:** Discard packet silently, resync to next START byte
+- **Framing Error:** Discard packet silently, resync to next START byte
 - **Timeout:** Discard partial packet after 100ms silence
 - **Invalid Command:** Send ERROR_INVALID_CMD with error code
 
 ### Recovery
 - On 3 consecutive CRC failures, suggest baud rate mismatch
 - On persistent framing errors, suggest physical connection check
+- Important commands should be retransmitted if no acknowledgment is received
 
 ---
 
@@ -1617,19 +1731,21 @@ Controller action: Stop retrying, broadcasts working
 
 ### Throughput
 
-**At Default 100ms Telemetry Period:**
-- TELEMETRY_BUNDLE (3 motors + 3 temps): ~90 bytes raw, ~120 bytes after stuffing + address = 1200 bytes/sec
-- TELEMETRY_BUNDLE (2 motors + 2 temps): ~66 bytes raw, ~90 bytes after stuffing + address = 900 bytes/sec
-- Individual messages (MOTOR + TEMP + STATE): ~100 bytes = 1000 bytes/sec
+**At Default 100ms Telemetry Period (1 motor, 1 temperature):**
+- MOTOR_DATA (32 bytes) + TEMPERATURE_DATA (32 bytes) + STATE_DATA (16 bytes at 2.5× rate)
+- ~70 bytes average per interval = 700 bytes/sec
+
+**At Default 100ms Telemetry Period (3 motors, 3 temperatures):**
+- 3× MOTOR_DATA + 3× TEMPERATURE_DATA + STATE_DATA
+- ~200 bytes average per interval = 2000 bytes/sec
 
 **At 500ms Telemetry Period (Lower Bandwidth):**
-- TELEMETRY_BUNDLE (3 motors + 3 temps): ~120 bytes after stuffing + address = 240 bytes/sec
-- TELEMETRY_BUNDLE (2 motors + 2 temps): ~90 bytes after stuffing + address = 180 bytes/sec
-- Individual messages: ~100 bytes = 200 bytes/sec
+- 1 motor + 1 temperature: ~140 bytes/sec
+- 3 motors + 3 temperatures: ~400 bytes/sec
 
 **At 115200 baud:**
 - Effective throughput: ~11,520 bytes/sec
-- Telemetry overhead: ~2-10% bandwidth utilization (depending on interval and configuration)
+- Telemetry overhead: ~1-17% bandwidth utilization (depending on interval and device count)
 
 ### Latency
 
@@ -1647,91 +1763,6 @@ Controller action: Stop retrying, broadcasts working
   - Default timeout: 30 seconds
   - Recommended controller ping interval: 10-15 seconds
   - Ensures safe shutdown if controller connection is lost
-
----
-
-## Migration from Helios Serial Protocol v1.4
-
-This section documents breaking changes for implementations migrating from Helios Serial Protocol v1.4.
-
-### Packet Format Changes
-
-1. **Address Field Added:**
-   - New 8-byte address field inserted after LENGTH, before MSG_TYPE
-   - Packet size increased: 6 bytes overhead → 14 bytes overhead
-   - Maximum payload reduced: 122 bytes → 114 bytes
-   - Buffer requirements unchanged (256 bytes still sufficient with stuffing)
-
-2. **Message Type Reorganization:**
-   - Configuration commands: 0x10-0x1F (new)
-   - Control commands: 0x20-0x2F (renumbered from 0x10-0x1F)
-   - Telemetry data: 0x30-0x3F (renumbered from 0x20-0x2F)
-   - Error messages: 0xE0-0xEF (unchanged)
-
-### Message Type Mapping
-
-| Old Type (v1.4) | Old Name | New Type | New Name |
-|-----------------|----------|----------|----------|
-| 0x10 | STATE_COMMAND | 0x20 | STATE_COMMAND |
-| 0x11 | MOTOR_COMMAND | 0x21 | MOTOR_COMMAND |
-| 0x12 | PUMP_COMMAND | 0x22 | PUMP_COMMAND |
-| 0x13 | GLOW_COMMAND | 0x23 | GLOW_COMMAND |
-| 0x14 | TEMP_COMMAND | 0x24 | TEMP_COMMAND |
-| 0x16 | TELEMETRY_CONFIG | 0x16 | TELEMETRY_CONFIG (unchanged) |
-| (new) | - | 0x1F | DISCOVERY_REQUEST (new) |
-| 0x1F | PING_REQUEST | 0x2F | PING_REQUEST |
-| 0x20 | STATE_DATA | 0x30 | STATE_DATA |
-| 0x21 | MOTOR_DATA | 0x31 | MOTOR_DATA |
-| 0x22 | PUMP_DATA | 0x32 | PUMP_DATA |
-| 0x23 | GLOW_DATA | 0x33 | GLOW_DATA |
-| 0x24 | TEMP_DATA | 0x34 | TEMP_DATA |
-| 0x25 | TELEMETRY_BUNDLE | 0x35 | TELEMETRY_BUNDLE |
-| (new) | - | 0x36 | DEVICE_ANNOUNCE (new) |
-| 0x2F | PING_RESPONSE | 0x3F | PING_RESPONSE |
-
-### New Features
-
-1. **Configuration Commands (0x10-0x13, 0x16):**
-   - MOTOR_CONFIG (0x10): Configure PWM, PID, RPM limits
-   - PUMP_CONFIG (0x11): Configure pulse timing
-   - TEMP_CONFIG (0x12): Configure PID and sampling
-   - GLOW_CONFIG (0x13): Configure max duration
-   - TELEMETRY_CONFIG (0x16): Configure telemetry broadcasts
-
-2. **Device Addressing:**
-   - All packets now include 64-bit source/destination address
-   - Enables multi-device networks
-   - Broadcast address (0x0000000000000000) for simultaneous control
-
-3. **Device Discovery:**
-   - DISCOVERY_REQUEST (0x1F): Broadcast command to discover devices
-   - DEVICE_ANNOUNCE (0x36): Response with device capabilities (motor/temp/pump/glow counts)
-
-4. **Terminology Changes:**
-   - Master → Controller
-   - Slave → Appliance
-   - (New) Monitor device type
-
-### Migration Checklist
-
-**For Protocol Implementations:**
-- [ ] Add 8-byte address field to packet encoder/decoder
-- [ ] Update message type constants (see mapping table)
-- [ ] Reduce maximum payload from 122 to 114 bytes
-- [ ] Implement configuration command handlers (0x10-0x15)
-- [ ] Update CRC calculation to include address field
-
-**For Applications:**
-- [ ] Assign unique 64-bit addresses to all devices
-- [ ] Update command transmission to include destination address
-- [ ] Update data reception to filter/match source addresses
-- [ ] Implement configuration persistence for new config commands
-- [ ] Update terminology in UI/documentation (master→controller, slave→appliance)
-
-**Backward Compatibility:**
-- **NOT SUPPORTED** - This is a breaking protocol change
-- Old v1.4 devices cannot communicate with new Fusain devices
-- Network upgrades must be performed atomically (all devices at once)
 
 ---
 
@@ -1946,7 +1977,7 @@ Since Fusain is not inherently collision-safe, RS-485 multi-drop requires softwa
 2. **Normal Operation:**
    - Controller uses addressing to send commands to specific appliances
    - Each appliance only responds when addressed (no collisions)
-   - Telemetry broadcasts occur at staggered intervals (configured per-device)
+   - Polling mode (TELEMETRY_CONFIG with interval_ms=0) is REQUIRED for multi-appliance networks to avoid broadcast collisions
 
 3. **Alternative: Addressed Polling:**
    - Avoid broadcast discovery entirely
@@ -2006,7 +2037,9 @@ Since Fusain is not inherently collision-safe, RS-485 multi-drop requires softwa
 
 **Status:** ✅ **COMPATIBLE** - Default Production Physical Layer
 
-**Use Case:** Production deployments for retrofitting heaters with single-wire communication to controller.
+**Restriction:** LIN MUST NOT be used for multi-appliance networks. LIN's single-master architecture and limited collision handling make it unsuitable for multi-drop configurations. Use RS-485 for multi-appliance networks.
+
+**Use Case:** Production deployments for retrofitting heaters with single-wire communication to controller (single appliance per bus).
 
 LIN (Local Interconnect Network) is the default physical layer for Fusain in production environments. Most heaters being retrofitted only have one wire available for appliance-to-controller communication, making LIN's single-wire topology ideal.
 
@@ -2069,7 +2102,7 @@ Controller MCU                          Appliance MCU
 4. **Discovery:**
    - DISCOVERY_REQUEST supported (uses LIN broadcast frame ID)
    - DEVICE_ANNOUNCE responses queued by transceivers
-   - No random delay needed (LIN master-slave avoids collisions)
+   - Random delay (0-50ms) MUST still be applied for protocol consistency across physical layers
 
 **MCU Integration:**
 
@@ -2078,7 +2111,7 @@ The MCU firmware is identical to UART/RS-485 configurations. The transceiver han
 **Benefits of LIN for Production:**
 - **Single-wire topology:** Ideal for retrofits with limited wiring
 - **Automotive-grade reliability:** Proven in harsh environments
-- **Built-in collision avoidance:** LIN master-slave scheduling prevents bus contention
+- **Built-in collision avoidance:** LIN centralized scheduling prevents bus contention
 - **Lower cost:** Cheaper than CAN bus, simpler than RS-485
 - **Integrated features:** Many transceivers include voltage regulation, diagnostics
 - **Standard compliance:** LIN 2.0+ specification ensures interoperability
@@ -2089,7 +2122,7 @@ The MCU firmware is identical to UART/RS-485 configurations. The transceiver han
 |--------|-------|-------|
 | **Baud Rate** | 19.2 kbaud | LIN standard, sufficient for Fusain |
 | **Max Distance** | ~40m | Shorter than RS-485, acceptable for heater installations |
-| **Max Nodes** | 16 | 1 controller + up to 15 appliances |
+| **Max Nodes** | 2 (Fusain) | LIN supports 16 nodes, but Fusain restricts to 1 controller + 1 appliance |
 | **Packet Latency** | 80-150ms | Depends on fragmentation and bus scheduling |
 | **Telemetry Interval** | 500ms recommended | Allows for fragmentation overhead |
 | **Bandwidth Utilization** | ~15-20% | Telemetry + commands at 500ms interval |
@@ -2112,10 +2145,10 @@ The MCU firmware is identical to UART/RS-485 configurations. The transceiver han
 |---------|-----------|--------|-----|
 | **Distance** | ~15m | ~1200m | ~40m |
 | **Baud Rate** | 115200 | 115200 | 19200 |
-| **Multi-drop** | No | Yes (32-256 nodes) | Yes (16 nodes) |
+| **Multi-drop** | No | Yes (32-256 nodes) | No (Fusain restriction) |
 | **Wiring** | 2-wire | 2-wire (differential) | 1-wire + ground |
 | **Noise Immunity** | Low | High | Medium-High |
-| **Collision Handling** | None | None (SW required) | Master-controlled |
+| **Collision Handling** | None | None (SW required) | Centralized |
 | **Implementation** | Simple | Moderate (DE/RE + SW) | Simple (transceiver IC) |
 | **Fusain Compatibility** | ✅ Native | ✅ With firmware mods | ✅ Via transceiver IC |
 | **Recommended Use** | Dev/testing only | Production (less common) | **Production (default)** |
@@ -2131,7 +2164,7 @@ The MCU firmware is identical to UART/RS-485 configurations. The transceiver han
    - Set telemetry interval to 500ms minimum
    - Ideal for heater retrofits with existing single-wire infrastructure
 
-2. **Multi-wire installations, long distances (>40m), or high node count (>16):** RS-485
+2. **Multi-appliance networks, multi-wire installations, or long distances (>40m):** RS-485
    - Implement DE/RE control in firmware or use auto-direction transceivers
    - Add random delays (0-50ms) to DISCOVERY_REQUEST responses
    - Use daisy-chain topology with proper termination (120Ω at both ends)
@@ -2154,12 +2187,7 @@ The MCU firmware is identical to UART/RS-485 configurations. The transceiver han
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 2.0 | 2026-01-05 | Thermoquad Team | **BREAKING CHANGE:** Complete protocol redesign. Renamed from "Helios Serial Protocol" to "Fusain Protocol". Added 64-bit device addressing for multi-device networks. Reorganized message types: configuration (0x10-0x1F), control (0x20-0x2F), telemetry (0x30-0x3F), errors (0xE0-0xEF). Added comprehensive configuration commands for motor (PWM, PID, RPM limits), pump (pulse timing), temperature (PID, sampling), and glow plug (max duration). Removed application-specific state machine configuration (STATE_CONFIG). Added device discovery mechanism: DISCOVERY_REQUEST (0x1F) broadcast command and DEVICE_ANNOUNCE (0x36) response with device capabilities. Updated terminology: master→controller, slave→appliance, added monitor device type. Maximum payload reduced from 122 to 114 bytes due to address field. Standardized units: timestamps in milliseconds since boot, PWM values in microseconds, pump/glow timing in milliseconds. Defined physical layer architecture: LIN (default production, via UART-to-LIN transceiver IC for single-wire retrofits), RS-485 (production for multi-wire installations), plain UART (development only). Added comprehensive multi-drop RS-485 topology documentation. Not backward compatible with v1.x. |
-| 1.4 | 2026-01-03 | Helios Team | Added pwm_period field to TELEMETRY_BUNDLE motor entries. Increased maximum packet size from 64 to 128 bytes. |
-| 1.3 | 2026-01-02 | Helios Team | Added Protocol Behavior subsection documenting slave transmission restrictions, byte synchronization, emergency stop behavior, and broadcast retry requirements. |
-| 1.2 | 2026-01-02 | Helios Team | Updated specification to use RFC 2119 requirement language. |
-| 1.1 | 2026-01-02 | Helios Team | Added TELEMETRY_CONFIG command for broadcast control with configurable interval and mode selection. Telemetry now disabled by default. |
-| 1.0 | 2025-12-31 | Helios Team | Initial Helios Serial Protocol specification |
+| 1.0 | 2026-01-06 | Thermoquad Team | Initial Fusain Protocol specification |
 
 ---
 
