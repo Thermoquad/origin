@@ -1,0 +1,528 @@
+<style>
+  :root {
+    --shadow-color: rgb(from var(--body-color) r g b / calc(alpha * 0.2));
+    --shadow-style: 0 12px 6px -6px var(--shadow-color);
+  }
+
+  h1 {
+    display: none;
+  }
+
+  .landing-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-top: 0.5rem;
+  }
+  .landing-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    &.three-col {
+      @media (min-width: 1024px) {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+  }
+
+  /* === SHARED CARD STYLES === */
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: bold;
+    color: var(--body-color);
+    margin-bottom: 0.25rem !important;
+  }
+  .card-description {
+    color: var(--body-color);
+    font-weight: 300;
+    font-size: 0.9rem !important;
+    margin: 0 !important;
+    opacity: 0.85;
+  }
+  .icon-wrapper i {
+    color: inherit;
+  }
+
+  /* === LANDING CARDS === */
+  .landing-card {
+    background-color: var(--landing-card-background-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.15s ease;
+    &:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-style);
+      text-decoration: none;
+      .landing-watermark {
+        transform: translateY(-50%) rotate(-8deg) scale(1.1);
+        opacity: 0.25;
+      }
+    }
+    .card-content {
+      flex: 1;
+      position: relative;
+      z-index: 2;
+    }
+    .card-description {
+      padding-right: 5rem;
+    }
+  }
+  .landing-watermark {
+    position: absolute;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    transform-origin: center center;
+    opacity: 0.12;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    color: var(--link-color);
+    i {
+      font-size: 5rem !important;
+      line-height: 1;
+    }
+  }
+
+  /* === PERSONA CARDS === */
+  .persona-card {
+    background-color: var(--landing-card-background-color);
+    border-radius: 0.75rem;
+    padding: 1.5rem 2rem;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+    border: 1px solid transparent;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: all 0.2s ease;
+    &:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-style);
+      border-color: rgba(255, 255, 255, 0.05);
+      .watermark {
+        transform: rotate(-10deg) scale(1.1);
+        opacity: 0.15;
+      }
+    }
+    .persona-link:hover {
+      font-weight: 500;
+    }
+    .card-content {
+      position: relative;
+      z-index: 2;
+      flex: 1;
+    }
+    @media (max-width: 768px) {
+      .watermark {
+        bottom:1rem;
+        right: 1rem;
+        i {
+          font-size: 7rem !important;
+        }
+      }
+    }
+  }
+  .persona-header {
+    margin-bottom: 1.5rem;
+    h3 {
+      min-height: 3rem;
+      font-size: 1.25rem;
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+    }
+    @media (max-width: 768px) {
+      z-index: 10;
+    }
+  }
+
+  /* Watermark */
+  .watermark {
+    position: absolute;
+    bottom: -1rem;
+    right: -1.5rem;
+    z-index: 0;
+    opacity: 0.05;
+    transform: rotate(0deg);
+    pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    i {
+      font-size: 9rem !important;
+      line-height: 1;
+    }
+    @media (max-width: 768px) {
+      bottom: -0.5rem;
+      right: -0.5rem;
+      opacity: 0.15;
+      i {
+        font-size: 6rem !important;
+      }
+    }
+  }
+
+  /* Persona Type Colors */
+  .type-firmware {
+    .watermark i {
+      color: #FF6B35;
+    }
+    .persona-link {
+      i {
+        color: #FF6B35;
+      }
+      &:hover {
+        color: #FF8B55 !important;
+      }
+    }
+  }
+  .type-protocol {
+    .watermark i {
+      color: #8b5cf6;
+    }
+    .persona-link {
+      i {
+        color: #8b5cf6;
+      }
+      &:hover {
+        color: #a78bfa !important;
+      }
+    }
+  }
+  .type-tools {
+    .watermark i {
+      color: #10b981;
+    }
+    .persona-link {
+      i {
+        color: #10b981;
+      }
+      &:hover {
+        color: #34d399 !important;
+      }
+    }
+  }
+
+  /* Persona Links */
+  .persona-list {
+    margin: 0 !important;
+    list-style: none;
+    padding: 0;
+    position: relative;
+    z-index: 2;
+    li {
+      list-style: none !important;
+      margin-left: 0 !important;
+      * {
+        margin-bottom: 0.1rem !important;
+      }
+    }
+  }
+  .persona-link {
+    display: flex;
+    align-items: center;
+    color: var(--body-color) !important;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: color 0.2s;
+    i {
+      font-size: 0.75rem;
+      margin-right: 0.6rem;
+    }
+    &:hover {
+      text-decoration: none;
+    }
+  }
+
+  /* === REFERENCE CARDS === */
+  .reference-card {
+    background-color: var(--landing-card-background-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-decoration: none;
+    transition: transform 0.1s ease;
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-style);
+      text-decoration: none;
+      .reference-arrow {
+        opacity: 1;
+        transform: translateX(4px);
+      }
+    }
+    .icon-wrapper {
+      width: 2.5rem;
+      height: 2.5rem;
+      flex-shrink: 0;
+      border-radius: 0.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card-title {
+      font-size: 1rem;
+      margin: 0;
+    }
+    .card-description {
+      font-weight: 100;
+    }
+  }
+  .reference-content {
+    flex: 1;
+  }
+  .reference-arrow {
+    flex-shrink: 0;
+    opacity: 0.5;
+    transition: all 0.2s ease;
+  }
+
+  /* === SECTION HEADERS === */
+  .section-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  .section-title {
+    font-size: 1.75rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem !important;
+  }
+  .section-subtitle {
+    opacity: 0.75;
+    margin-top: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  /* === COLOR ACCENTS === */
+  .ref-protocol {
+    background-color: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+  }
+  .ref-hardware {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+  }
+  .ref-api {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+  }
+  .ref-glossary {
+    background-color: rgba(249, 115, 22, 0.2);
+    color: #fb923c;
+  }
+</style>
+
+<main class="landing-container">
+  <section>
+    <div class="landing-grid">
+      <a href="introduction/index.html" class="landing-card">
+        <div class="landing-watermark">
+          <i class="fa fa-info-circle" aria-hidden="true"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">What is Thermoquad?</h3>
+          <p class="card-description">Discover the project, its goals, and architecture.</p>
+        </div>
+      </a>
+
+      <a href="getting-started/index.html" class="landing-card">
+        <div class="landing-watermark">
+          <i class="fa fa-lightbulb-o" aria-hidden="true" style="font-size: 5.5rem !important;"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Getting Started</h3>
+          <p class="card-description">
+            Set up your development environment and build your first firmware.
+          </p>
+        </div>
+      </a>
+
+      <a href="hardware/index.html" class="landing-card">
+        <div class="landing-watermark">
+          <i class="fa fa-microchip" aria-hidden="true"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Hardware</h3>
+          <p class="card-description">Board definitions, schematics, and component details.</p>
+        </div>
+      </a>
+
+      <a href="firmware/index.html" class="landing-card">
+        <div class="landing-watermark">
+          <i class="fa fa-cogs" aria-hidden="true"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Firmware</h3>
+          <p class="card-description">Helios ICU and Slate controller firmware documentation.</p>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <section style="margin-top: 3rem">
+    <div class="section-header">
+      <h2 class="section-title">Explore by Topic</h2>
+      <p class="section-subtitle">
+        Find documentation tailored to what you're working on.
+      </p>
+    </div>
+
+    <div class="landing-grid three-col">
+      <div class="persona-card type-firmware">
+        <div class="watermark">
+          <i class="fa fa-fire" aria-hidden="true"></i>
+        </div>
+        <div class="card-content">
+          <div class="persona-header">
+            <h3 class="card-title">Firmware Development</h3>
+            <p class="card-description">Build and extend Thermoquad firmware applications.</p>
+          </div>
+          <ul class="persona-list">
+            <li>
+              <a href="firmware/helios/index.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Helios ICU</span></a>
+            </li>
+            <li>
+              <a href="firmware/slate/index.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Slate Controller</span></a>
+            </li>
+            <li>
+              <a href="firmware/architecture.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Architecture</span></a>
+            </li>
+            <li>
+              <a href="firmware/building.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Building Firmware</span></a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="persona-card type-protocol">
+        <div class="watermark">
+          <i class="fa fa-exchange" aria-hidden="true"></i>
+        </div>
+        <div class="card-content">
+          <div class="persona-header">
+            <h3 class="card-title">Specifications</h3>
+            <p class="card-description">System behavior and communication protocols.</p>
+          </div>
+          <ul class="persona-list">
+            <li>
+              <a href="specifications/burn-cycle/index.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Burn Cycle</span></a>
+            </li>
+            <li>
+              <a href="specifications/fusain/index.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Fusain Protocol</span></a>
+            </li>
+            <li>
+              <a href="specifications/fusain/messages.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Message Types</span></a>
+            </li>
+            <li>
+              <a href="specifications/fusain/physical-layer.html" class="persona-link"><i class="fa fa-chevron-right"
+                  aria-hidden="true"></i><span>Physical Layer</span></a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="persona-card type-tools">
+        <div class="watermark">
+          <i class="fa fa-wrench" aria-hidden="true"></i>
+        </div>
+        <div class="card-content">
+          <div class="persona-header">
+            <h3 class="card-title">Development Tools</h3>
+            <p class="card-description">Tools for debugging and development.</p>
+          </div>
+          <ul class="persona-list">
+            <li>
+              <a href="tools/heliostat/index.html" class="persona-link">
+                <i class="fa fa-chevron-right" aria-hidden="true"></i><span>Heliostat Analyzer</span></a>
+            </li>
+            <li>
+              <a href="tools/west.html" class="persona-link">
+                <i class="fa fa-chevron-right" aria-hidden="true"></i><span>West Workspace</span></a>
+            </li>
+            <li>
+              <a href="tools/taskfile.html" class="persona-link">
+                <i class="fa fa-chevron-right" aria-hidden="true"></i>
+                <span>Taskfile Commands</span>
+              </a>
+            </li>
+            <li>
+              <a href="tools/debugging.html" class="persona-link">
+                <i class="fa fa-chevron-right" aria-hidden="true"></i>
+                <span>Debugging</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-top: 1rem;">
+    <div class="section-header">
+      <h2 class="section-title">Reference</h2>
+      <p class="section-subtitle">Technical specifications and API documentation</p>
+    </div>
+
+    <div class="landing-grid three-col">
+      <a href="reference/fusain-spec.html" class="reference-card">
+        <div class="icon-wrapper ref-protocol">
+          <i class="fa fa-file-text-o" aria-hidden="true" style="font-size: 1.25rem"></i>
+        </div>
+        <div class="reference-content">
+          <h3 class="card-title">Protocol Specification</h3>
+          <p class="card-description">Fusain Protocol v2.0</p>
+        </div>
+        <i class="fa fa-arrow-right reference-arrow" style="color: #a78bfa"></i>
+      </a>
+
+      <a href="reference/hardware-spec.html" class="reference-card">
+        <div class="icon-wrapper ref-hardware">
+          <i class="fa fa-microchip" aria-hidden="true" style="font-size: 1.25rem"></i>
+        </div>
+        <div class="reference-content">
+          <h3 class="card-title">Hardware Reference</h3>
+          <p class="card-description">Pin assignments & specs</p>
+        </div>
+        <i class="fa fa-arrow-right reference-arrow" style="color: #4ade80"></i>
+      </a>
+
+      <a href="reference/api.html" class="reference-card">
+        <div class="icon-wrapper ref-api">
+          <i class="fa fa-book" aria-hidden="true" style="font-size: 1.25rem"></i>
+        </div>
+        <div class="reference-content">
+          <h3 class="card-title">API Reference</h3>
+          <p class="card-description">Library documentation</p>
+        </div>
+        <i class="fa fa-arrow-right reference-arrow" style="color: #60a5fa"></i>
+      </a>
+
+      <a href="reference/glossary.html" class="reference-card">
+        <div class="icon-wrapper ref-glossary">
+          <i class="fa fa-font" aria-hidden="true" style="font-size: 1.25rem"></i>
+        </div>
+        <div class="reference-content">
+          <h3 class="card-title">Glossary</h3>
+          <p class="card-description">Key term definitions</p>
+        </div>
+        <i class="fa fa-arrow-right reference-arrow" style="color: #fb923c"></i>
+      </a>
+    </div>
+  </section>
+</main>

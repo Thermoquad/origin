@@ -1,0 +1,44 @@
+version: "3"
+
+vars:
+  SPHINXBUILD: sphinx-build
+  SOURCEDIR: source
+  BUILDDIR: build
+
+tasks:
+  default:
+    desc: Build HTML documentation
+    cmds:
+      - task: html
+
+  install:
+    desc: Install Python dependencies from requirements.txt
+    cmds:
+      - pip install -r requirements.txt
+
+  html:
+    desc: Build HTML documentation
+    cmds:
+      - "{{.SPHINXBUILD}} -M html {{.SOURCEDIR}} {{.BUILDDIR}}"
+
+  clean:
+    desc: Clean build directory
+    cmds:
+      - "{{.SPHINXBUILD}} -M clean {{.SOURCEDIR}} {{.BUILDDIR}}"
+
+  serve:
+    desc: Build and serve documentation locally
+    cmds:
+      - task: html
+      - echo "Serving at http://localhost:8000"
+      - python3 -m http.server 8000 --directory {{.BUILDDIR}}/html
+
+  linkcheck:
+    desc: Check external links
+    cmds:
+      - "{{.SPHINXBUILD}} -M linkcheck {{.SOURCEDIR}} {{.BUILDDIR}}"
+
+  help:
+    desc: Show Sphinx help
+    cmds:
+      - "{{.SPHINXBUILD}} -M help {{.SOURCEDIR}} {{.BUILDDIR}}"

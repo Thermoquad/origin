@@ -22,6 +22,7 @@ tasks:
       - task: setup-workspace:dependency-check
       - task: setup-workspace:python
       - task: setup-workspace:asdf
+      - task: setup-workspace:claude-md
       - task: setup-workspace:direnv
       - task: setup-workspace:directories
 

@@ -12,6 +12,7 @@ tasks:
         arm-none-eabi-gcc \
         arm-none-eabi-newlib \
         base-devel \
+        git \
         ccache \
         cmake \
         dfu-util \

@@ -12,21 +12,26 @@ This is the **Thermoquad organization project root**. It contains all tooling, S
 
 ```
 Thermoquad/                    # Organization root (this directory)
+├── .claude/                   # AI assistant working files (plans, settings)
 ├── CLAUDE.md                  # Symlink to origin/CLAUDE.md (this file)
 ├── origin/                    # West manifest repository (version controlled)
 │   ├── CLAUDE.md              # This file (canonical location)
 │   ├── west.yml               # West manifest for Zephyr workspace
-│   ├── Taskfile.yml           # Organization-level task definitions
+│   ├── Taskfile.dist.yml      # Organization-level task definitions
 │   ├── tasks/                 # Shared task scripts
-│   └── docs/                  # Organization-level documentation
+│   ├── documentation/         # Sphinx documentation (public-facing)
+│   │   ├── source/            # reStructuredText source files
+│   │   └── build/             # Generated HTML (not committed)
+│   └── docs/                  # Internal documentation
 │       └── protocols/         # Protocol specifications
 │           └── serial_protocol.md  # Fusain Protocol v2.0
 ├── apps/                      # Firmware applications
 │   ├── helios/                # Helios burner ICU firmware
-│   ├── slate/                 # Slate firmware (planned)
+│   ├── slate/                 # Slate controller firmware
 │   └── [other-firmwares]/     # Future firmware projects
 ├── modules/                   # Zephyr modules and libraries
-│   ├── lib/                   # Shared libraries (e.g., serial protocol)
+│   ├── lib/                   # Shared libraries
+│   │   └── fusain/            # Fusain serial protocol library
 │   ├── hal/                   # Hardware abstraction layers
 │   └── [other-modules]/       # Other module types
 ├── boards/                    # Custom board definitions
@@ -42,27 +47,41 @@ Thermoquad/                    # Organization root (this directory)
 - **Purpose:** Version-controlled repository containing west manifest and org-level configuration
 - **Contains:**
   - `west.yml` - Defines workspace dependencies and module locations
-  - `Taskfile.yml` - Organization-level build and development tasks
+  - `Taskfile.dist.yml` - Organization-level build and development tasks
   - `CLAUDE.md` - This file
-  - `docs/protocols/` - Organization-level protocol specifications (Fusain Protocol v2.0)
+  - `documentation/` - Sphinx documentation (see below)
+  - `docs/protocols/` - Internal protocol specifications (Fusain Protocol v2.0)
   - `.envrc`, `.tool-versions` - Development environment configuration
 - **Git:** This is a separate git repository
 - **Symlinks:** Configuration files are symlinked to org root for convenience
+
+### `origin/documentation/` - Sphinx Documentation
+- **Purpose:** Public-facing documentation built with Sphinx
+- **Build:** Run `task html` to generate HTML output
+- **Preview:** Run `task serve` to preview locally
+- **Style:** Based on Zephyr documentation theme with dark mode support
+- **Contents:**
+  - Introduction and project overview
+  - Specifications (Fusain protocol, burner cycle)
+  - Firmware documentation (Helios, Slate)
+  - Hardware reference
+  - API documentation
+- **Documentation:** `origin/documentation/CLAUDE.md`
 
 ### `apps/` - Firmware Applications
 - **Purpose:** Executable firmware projects for specific hardware platforms
 - **Platform:** Zephyr RTOS on Raspberry Pi Pico 2 (RP2350/RP2354)
 - **Examples:**
   - `helios/` - Liquid fuel burner ignition control unit (ICU)
-  - `slate/` - (Planned firmware)
+  - `slate/` - Controller firmware
 - **Convention:** Each app has its own CLAUDE.md that references this file
 
 ### `modules/lib/` - Shared Libraries
 - **Purpose:** Reusable code modules shared across multiple firmware projects
-- **Examples:**
-  - Serial protocol libraries (planned)
-  - Common utilities and abstractions
+- **Libraries:**
+  - `fusain/` - Fusain serial protocol library (✅ implemented)
 - **Usage:** Referenced by firmware applications via CMake or west manifest
+- **Documentation:** Each library has its own CLAUDE.md
 
 ### `modules/hal/`, `modules/fs/`, etc. - Other Modules
 - **Purpose:** Hardware abstraction layers, filesystems, and other Zephyr modules
@@ -80,11 +99,11 @@ Thermoquad/                    # Organization root (this directory)
 - **Purpose:** Scripts and utilities for development workflow
 - **Examples:** Build scripts, flash utilities, code generators
 - **Notable Tools:**
-  - `heliostat/` - Helios serial protocol analyzer (Go)
+  - `heliostat/` - Fusain protocol analyzer (Go)
     - Real-time packet decoder and error detector
     - Cobra CLI with `raw_log` and `error_detection` commands
     - TUI mode with live statistics (default)
-    - Reusable `pkg/helios_protocol` Go package
+    - **Reference Go implementation:** `pkg/fusain` (canonical Go implementation of Fusain protocol)
     - Usage: `heliostat error_detection --port /dev/ttyUSB0`
     - See `tools/heliostat/CLAUDE.md` for documentation
 
@@ -115,6 +134,26 @@ Thermoquad/                    # Organization root (this directory)
 ## Project Overview
 [Project-specific content...]
 ```
+
+---
+
+## AI Assistant Working Files
+
+### Plan Storage
+
+**Location:** `.claude/` at the organization root (`/home/kazw/Projects/Thermoquad/.claude/`)
+
+When AI assistants create implementation plans for Thermoquad projects, plans should be stored in the organization's `.claude/` directory rather than the user's home directory.
+
+**Contents:**
+- `plans/` - Implementation plan files (`.md`)
+- `settings.local.json` - Local Claude Code settings
+
+**Why Organization-Level:**
+- Plans are project-specific and belong with the project
+- Easier to reference across sessions
+- Keeps user's home directory clean
+- Plans can be shared or reviewed if needed
 
 ---
 
@@ -392,23 +431,27 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
 ### Shared Libraries
 
-#### Fusain - Helios Serial Protocol Library
+#### Fusain - Serial Protocol Library
 - **Status:** ✅ Implemented
 - **Location:** `modules/lib/fusain/`
-- **Purpose:** Shared C library for Helios serial protocol
+- **Purpose:** Shared C library for Fusain serial protocol
 - **Usage:** Used by both Helios (ICU) and Slate (controller)
 - **Features:** CRC-16-CCITT, byte stuffing, packet encoding/decoding
-- **Protocol Specification:** `docs/protocols/serial_protocol.md` (Fusain Protocol v2.0)
+- **Protocol Specification:** `origin/documentation/source/specifications/fusain/` (Sphinx docs)
+- **Reference Implementations:**
+  - **C:** `modules/lib/fusain/` - Embedded C for Zephyr RTOS
+  - **Go:** `tools/heliostat/pkg/fusain/` - Reference Go implementation
 - **Documentation:** `modules/lib/fusain/CLAUDE.md`
 
 ### Development Tools
 
-#### Heliostat - Serial Protocol Analyzer
+#### Heliostat - Fusain Protocol Analyzer
 - **Status:** ✅ Implemented
 - **Location:** `tools/heliostat/`
 - **Language:** Go
-- **Purpose:** Real-time Helios protocol analyzer and error detector
+- **Purpose:** Real-time Fusain protocol analyzer and error detector
 - **Features:** Cobra CLI, TUI mode, error detection, statistics tracking
+- **Reference Go Implementation:** `pkg/fusain/` - Canonical Go implementation of Fusain protocol
 - **Documentation:** `tools/heliostat/CLAUDE.md`
 
 ---
@@ -513,18 +556,28 @@ Each project has its own CLAUDE.md file with detailed documentation:
   - Serial communication via Fusain library
 
 **Shared Libraries:**
-- **Fusain:** `modules/lib/fusain/CLAUDE.md` - Helios serial protocol library
-  - Shared C library for Helios protocol encoding/decoding
+- **Fusain:** `modules/lib/fusain/CLAUDE.md` - Fusain serial protocol library (C)
+  - Shared C library for Fusain protocol encoding/decoding
   - Used by both ICU (Helios) and controller (Slate)
   - CRC-16-CCITT, byte stuffing, packet framing
   - Message types, telemetry bundles, command structures
 
 **Development Tools:**
-- **Heliostat:** `tools/heliostat/CLAUDE.md` - Serial protocol analyzer (Go)
+- **Heliostat:** `tools/heliostat/CLAUDE.md` - Fusain protocol analyzer (Go)
   - Real-time packet decoder and validator
   - Error detection mode with statistics tracking
   - TUI interface with Bubbletea
-  - Reusable `pkg/helios_protocol` Go package
+  - **Reference Go implementation:** `pkg/fusain/` - Canonical Go implementation
+
+**Documentation:**
+- **Sphinx Docs:** `origin/documentation/CLAUDE.md` - Public documentation
+  - Build with `task html`, preview with `task serve`
+  - Zephyr-style theme with dark mode
+  - reStructuredText source in `source/`
+- **Fusain Specifications:** `origin/documentation/source/specifications/fusain/`
+  - Protocol overview, packet format, message definitions
+  - Implementation guide, communication patterns
+  - Physical layer options (LIN, RS-485, TCP, WebSocket)
 
 ---
 
@@ -551,7 +604,7 @@ This is the Thermoquad project organization. For questions or issues:
 
 ---
 
-**Last Updated:** 2026-01-04
+**Last Updated:** 2026-01-09
 
 **Organization Maintainer:** kazw
 
@@ -566,3 +619,60 @@ This is the Thermoquad project organization. For questions or issues:
 5. **Update this file** if you discover organization-wide patterns that should be documented
 
 **Remember:** This organization values clarity and communication. When in doubt, ask!
+
+---
+
+## Content Integrity Check
+
+A **content integrity check** verifies consistency across all CLAUDE.md files in the organization. This ensures documentation remains accurate and cross-references are valid.
+
+**Scope:** Content integrity checks analyze **only the CLAUDE.md files themselves**. They do not analyze source code, configuration files, or other project files.
+
+**What to Check:**
+- Path references to protocol specifications and implementations
+- Package and library names
+- Project status descriptions
+- Last Updated dates
+- Cross-references between files
+- Contradictions between files (e.g., conflicting specifications)
+- Inconsistencies in terminology or naming conventions
+
+**CLAUDE.md Files to Check:**
+1. `origin/CLAUDE.md` - Organization-level (this file)
+2. `origin/documentation/CLAUDE.md` - Sphinx documentation
+3. `modules/lib/fusain/CLAUDE.md` - Fusain C library
+4. `apps/helios/CLAUDE.md` - Helios ICU firmware
+5. `apps/slate/CLAUDE.md` - Slate controller firmware
+6. `tools/heliostat/CLAUDE.md` - Heliostat analyzer (Go)
+
+**When to Run:**
+- After updating protocol specifications
+- After renaming packages or changing paths
+- After updating project status
+- Periodically to catch documentation drift
+
+**How to Request:**
+Ask the AI assistant to "run a content integrity check on all CLAUDE.md files"
+
+---
+
+## CLAUDE.md Reload
+
+A **CLAUDE.md reload** reads all CLAUDE.md files in the organization to refresh the AI assistant's context with the latest documentation.
+
+**Purpose:** Ensures the AI assistant has current information from all project documentation, especially useful when:
+- Starting a new session after documentation updates
+- Switching between projects and needing full context
+- After another user or process has updated CLAUDE.md files
+- When you want to ensure the assistant has the complete picture
+
+**CLAUDE.md Files to Load:**
+1. `origin/CLAUDE.md` - Organization-level (this file)
+2. `origin/documentation/CLAUDE.md` - Sphinx documentation
+3. `modules/lib/fusain/CLAUDE.md` - Fusain C library
+4. `apps/helios/CLAUDE.md` - Helios ICU firmware
+5. `apps/slate/CLAUDE.md` - Slate controller firmware
+6. `tools/heliostat/CLAUDE.md` - Heliostat analyzer (Go)
+
+**How to Request:**
+Ask the AI assistant to "reload all CLAUDE.md files"

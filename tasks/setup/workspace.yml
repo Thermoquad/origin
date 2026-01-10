@@ -38,6 +38,14 @@ tasks:
     cmds:
       - cd .. && ln -s origin/tool-versions .tool-versions
 
+  claude-md:
+    desc: Setup the workspace CLAUDE.md symlink
+    internal: true
+    status:
+      - test -L ../CLAUDE.md
+    cmds:
+      - cd .. && ln -s origin/CLAUDE.md CLAUDE.md
+
   direnv:
     desc: Setup the workspace direnv configuration
     internal: true
