@@ -1,3 +1,5 @@
+.. _fusain-protocol:
+
 Overview
 ########
 
