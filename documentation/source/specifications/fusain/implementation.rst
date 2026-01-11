@@ -585,16 +585,24 @@ implementations.
 CRC Implementation
 ------------------
 
-Use Zephyr's native CRC in Zephyr mode:
+Use Zephyr's native CRC when built as a Zephyr module:
 
 .. code-block:: c
 
-   #ifdef CONFIG_ZEPHYR
+   #ifdef CONFIG_FUSAIN
+     /* Zephyr module - use optimized CRC */
      #include <zephyr/sys/crc.h>
      #define fusain_crc16(data, len) crc16_itu_t(0xFFFF, data, len)
    #else
+     /* Standalone build - use built-in CRC */
      uint16_t fusain_crc16(const uint8_t *data, size_t len);
    #endif
+
+.. note::
+
+   ``CONFIG_FUSAIN`` is defined by Kconfig when the Fusain module is enabled
+   in a Zephyr build (``CONFIG_FUSAIN=y`` in prj.conf). This is the standard
+   pattern for Zephyr modules to detect they are being built within Zephyr.
 
 Buffer Management
 -----------------
