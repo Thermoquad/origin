@@ -14,4 +14,3 @@ Fusain Protocol
    tcp
    physical-layer
    implementation
-   v3-proposal

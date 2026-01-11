@@ -1,7 +1,9 @@
 Communication Patterns
 ######################
 
-This document describes the communication patterns used in the :term:`Fusain` protocol.
+This document describes the communication patterns used in the :term:`Fusain`
+protocol. For implementation details including timeouts and buffer handling,
+see :doc:`implementation`.
 
 
 Command-Response
@@ -127,6 +129,7 @@ Appliances automatically transition to safe state if communication is lost.
 - Ensures appliance doesn't operate indefinitely without supervision
 - Critical for burner systems where communication loss requires safe shutdown
 - IDLE mode performs proper cooldown if temperature is elevated
+- **Exception:** E_STOP suspends timeout behavior; see :ref:`impl-estop`
 
 
 Polling Mode
@@ -149,7 +152,8 @@ Controllers explicitly request telemetry instead of receiving broadcasts.
 
 **Use Cases:**
 
-- Multi-appliance networks (prevents broadcast collisions on RS-485)
+- Multi-appliance networks (prevents broadcast collisions on RS-485). See
+  :doc:`physical-layer` for RS-485 configuration.
 - Bandwidth-constrained links (request only needed data)
 - Power-sensitive applications (reduces transmissions)
 

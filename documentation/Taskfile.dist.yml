@@ -4,12 +4,22 @@ vars:
   SPHINXBUILD: sphinx-build
   SOURCEDIR: source
   BUILDDIR: build
+  CDDL_FILE: source/specifications/fusain/fusain.cddl
+  CDDL_TYPES: >-
+    motor-config-payload pump-config-payload temp-config-payload glow-config-payload
+    data-subscription-payload telemetry-config-payload timeout-config-payload
+    state-command-payload motor-command-payload pump-command-payload glow-command-payload
+    temp-command-payload send-telemetry-payload
+    state-data-payload motor-data-payload pump-data-payload glow-data-payload
+    temp-data-payload device-announce-payload ping-response-payload
+    error-invalid-cmd-payload error-state-reject-payload
 
 tasks:
-  default:
-    desc: Build HTML documentation
+  ci:
+    desc: Build HTML documentation and validate CDDL schema
     cmds:
       - task: html
+      - task: validate-cddl
 
   install:
     desc: Install Python dependencies from requirements.txt
@@ -33,6 +43,18 @@ tasks:
       - echo "Serving at http://localhost:8000"
       - python3 -m http.server 8000 --directory {{.BUILDDIR}}/html
 
+  auto-build:
+    desc: Rebuild documentation automatically when files are saved
+    watch: true
+    sources:
+      - "{{.SOURCEDIR}}/**/*.rst"
+      - "{{.SOURCEDIR}}/**/*.md"
+      - "{{.SOURCEDIR}}/**/*.py"
+      - "{{.SOURCEDIR}}/_static/**"
+      - "{{.SOURCEDIR}}/_templates/**"
+      - "{{.CDDL_FILE}}"
+    cmd: task ci
+
   linkcheck:
     desc: Check external links
     cmds:
@@ -42,3 +64,19 @@ tasks:
     desc: Show Sphinx help
     cmds:
       - "{{.SPHINXBUILD}} -M help {{.SOURCEDIR}} {{.BUILDDIR}}"
+
+  validate-cddl:
+    desc: Validate the Fusain CDDL schema using zcbor
+    sources:
+      - "{{.CDDL_FILE}}"
+    generates:
+      - "{{.BUILDDIR}}/cddl/fusain.c"
+      - "{{.BUILDDIR}}/cddl/fusain.h"
+    cmds:
+      - mkdir -p {{.BUILDDIR}}/cddl
+      - zcbor code
+          --cddl {{.CDDL_FILE}}
+          --output-c {{.BUILDDIR}}/cddl/fusain.c
+          --output-h {{.BUILDDIR}}/cddl/fusain.h
+          -t {{.CDDL_TYPES}}
+          --decode --encode

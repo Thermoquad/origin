@@ -1,0 +1,255 @@
+;
+; Copyright (c) 2025 Kaz Walker, Thermoquad
+; SPDX-License-Identifier: Apache-2.0
+;
+; Fusain Protocol - CBOR Schema (CDDL)
+;
+; This schema defines the CBOR-encoded payload format for Fusain.
+;
+; Wire format:
+;   [START][LENGTH][ADDRESS(8)][CBOR_PAYLOAD][CRC(2)][END]
+;
+; Features:
+;   - Schema-driven validation
+;   - Optional fields without padding bytes
+;   - Future extensibility (add fields without breaking compatibility)
+;   - Self-describing format for debugging
+;   - Generated encode/decode code via zcbor
+;
+
+; ===========================================================================
+; Common Types
+; ===========================================================================
+
+; Timestamp in milliseconds since boot (wraps at 2^32)
+timestamp = uint .size 4
+
+; Device/peripheral indices (0-9 typically)
+device-index = uint .size 1
+motor-index = uint .size 1       ; motor peripheral index
+pump-index = uint .size 1        ; pump peripheral index
+thermometer-index = uint .size 1 ; thermometer peripheral index
+glow-index = uint .size 1        ; glow plug peripheral index
+
+; 64-bit device address
+address = uint .size 8
+
+; ===========================================================================
+; Enumerations
+; ===========================================================================
+
+; Operating modes (matches fusain_mode_t)
+; Values: 0=idle, 1=fan, 2=heat, 255=emergency
+mode = uint .le 255
+
+; System states (matches fusain_state_t)
+; Values: 0=initializing, 1=idle, 2=blowing, 3=preheat, 4=preheat-stage-2,
+;         5=heating, 6=cooling, 7=error, 8=e-stop
+state = uint .le 255
+
+; Error codes (matches fusain_error_t)
+; Values: 0=none, 1=overheat, 2=sensor-fault, 3=ignition-fail, 4=flame-out,
+;         5=motor-stall, 6=pump-fault, 7=commanded-estop
+error-code = uint .le 255
+
+; Temperature command types
+; Values: 0=watch-motor, 1=unwatch-motor, 2=enable-rpm-control,
+;         3=disable-rpm-control, 4=set-target-temperature
+temp-cmd-type = uint .le 255
+
+; Pump event types
+; Values: 0=initializing, 1=ready, 2=error, 3=cycle-start, 4=pulse-end, 5=cycle-end
+pump-event = uint .le 255
+
+; Telemetry types for SEND_TELEMETRY command
+; Values: 0=state, 1=motor, 2=temperature, 3=pump, 4=glow
+telemetry-type = uint .le 255
+
+; ===========================================================================
+; Message Types (first element of the CBOR message array)
+; ===========================================================================
+
+; Message type ranges:
+;   0x10-0x1F: Configuration Commands (Controller -> Appliance)
+;   0x20-0x2F: Control Commands (Controller -> Appliance)
+;   0x30-0x3F: Telemetry Data (Appliance -> Controller)
+;   0xE0-0xEF: Error Messages (Bidirectional)
+;
+; Specific values:
+;   0x10=motor-config, 0x11=pump-config, 0x12=temp-config, 0x13=glow-config
+;   0x14=data-subscription, 0x15=data-unsubscribe, 0x16=telemetry-config
+;   0x17=timeout-config, 0x1F=discovery-request
+;   0x20=state-command, 0x21=motor-command, 0x22=pump-command, 0x23=glow-command
+;   0x24=temp-command, 0x25=send-telemetry, 0x2F=ping-request
+;   0x30=state-data, 0x31=motor-data, 0x32=pump-data, 0x33=glow-data
+;   0x34=temp-data, 0x35=device-announce, 0x3F=ping-response
+;   0xE0=error-invalid-cmd, 0xE1=error-state-reject
+msg-type = uint .le 255
+
+; ===========================================================================
+; Wire Format Notes
+; ===========================================================================
+
+; All messages are encoded as: [type, payload_map]
+; The framing layer handles START/LENGTH/ADDRESS/CRC/END.
+; CBOR payload is: [msg-type, payload-map]
+;
+; Code generation note:
+; zcbor generates individual encode/decode functions for each payload type.
+; Message type dispatch is handled by application code, not CDDL union.
+
+; ===========================================================================
+; Configuration Command Payloads (0x10-0x1F)
+; ===========================================================================
+
+motor-config-payload = {
+    0 => motor-index,                   ; motor: Motor index
+    ? 1 => uint .size 4,                ; pwm-period: PWM period in nanoseconds (optional)
+    ? 2 => float,                       ; pid-kp: PID proportional gain (optional)
+    ? 3 => float,                       ; pid-ki: PID integral gain (optional)
+    ? 4 => float,                       ; pid-kd: PID derivative gain (optional)
+    ? 5 => int,                         ; max-rpm: Maximum RPM (optional)
+    ? 6 => int,                         ; min-rpm: Minimum stable RPM (optional)
+    ? 7 => uint .size 4,                ; min-pwm-duty: Minimum PWM duty (ns, optional)
+}
+
+pump-config-payload = {
+    0 => pump-index,                    ; pump: Pump index
+    ? 1 => uint,                        ; pulse-ms: Pulse duration in ms (optional)
+    ? 2 => uint,                        ; recovery-ms: Recovery time in ms (optional)
+}
+
+temp-config-payload = {
+    0 => thermometer-index,             ; thermometer: Thermometer index
+    ? 1 => float,                       ; pid-kp: PID proportional gain (optional)
+    ? 2 => float,                       ; pid-ki: PID integral gain (optional)
+    ? 3 => float,                       ; pid-kd: PID derivative gain (optional)
+}
+
+glow-config-payload = {
+    0 => glow-index,                    ; glow: Glow plug index
+    ? 1 => uint,                        ; max-duration: Maximum glow duration in ms (optional)
+}
+
+data-subscription-payload = {
+    0 => address,                       ; appliance-address: Address of appliance to subscribe to
+}
+
+; data-unsubscribe uses same payload as data-subscription
+
+telemetry-config-payload = {
+    0 => bool,                          ; enabled: Telemetry broadcast enabled
+    1 => uint,                          ; interval-ms: Broadcast interval (0 = polling mode)
+}
+
+timeout-config-payload = {
+    0 => bool,                          ; enabled: Timeout enabled
+    1 => uint,                          ; timeout-ms: Timeout interval (5000-60000)
+}
+
+; discovery-request has no payload (nil)
+
+; ===========================================================================
+; Control Command Payloads (0x20-0x2F)
+; ===========================================================================
+
+state-command-payload = {
+    0 => mode,                          ; mode: Target operating mode
+    ? 1 => int,                         ; argument: Mode-specific argument (RPM for FAN, rate for HEAT)
+}
+
+motor-command-payload = {
+    0 => motor-index,                   ; motor: Motor index
+    1 => int,                           ; rpm: Target RPM (0 = stop)
+}
+
+pump-command-payload = {
+    0 => pump-index,                    ; pump: Pump index
+    1 => int,                           ; rate-ms: Pulse interval in ms (0 = stop)
+}
+
+glow-command-payload = {
+    0 => glow-index,                    ; glow: Glow plug index
+    1 => int,                           ; duration: Burn duration in ms (0 = off)
+}
+
+temp-command-payload = {
+    0 => thermometer-index,             ; thermometer: Temperature controller index
+    1 => temp-cmd-type,                 ; type: Command type
+    ? 2 => motor-index,                 ; motor-index: Motor to control (for WATCH_MOTOR)
+    ? 3 => float,                       ; target-temperature: Target temperature (for SET_TARGET_TEMPERATURE)
+}
+
+send-telemetry-payload = {
+    0 => telemetry-type,                ; telemetry-type: Which telemetry to send
+    ? 1 => uint,                        ; index: Peripheral index (0xFFFFFFFF = all)
+}
+
+; ping-request has no payload (nil)
+
+; ===========================================================================
+; Telemetry Data Payloads (0x30-0x3F)
+; ===========================================================================
+
+state-data-payload = {
+    0 => bool,                          ; error: Error flag
+    1 => error-code,                    ; code: Error code
+    2 => state,                         ; state: Current system state
+    3 => timestamp,                     ; timestamp: Timestamp in ms
+}
+
+motor-data-payload = {
+    0 => motor-index,                   ; motor: Motor index
+    1 => timestamp,                     ; timestamp: Reading timestamp
+    2 => int,                           ; rpm: Current measured RPM
+    3 => int,                           ; target: Target RPM setpoint
+    ? 4 => int,                         ; max-rpm: Maximum achievable RPM
+    ? 5 => int,                         ; min-rpm: Minimum stable RPM
+    ? 6 => uint .size 4,                ; pwm: Current PWM pulse width (ns)
+    ? 7 => uint .size 4,                ; pwm-max: PWM period (ns)
+}
+
+pump-data-payload = {
+    0 => pump-index,                    ; pump: Pump index
+    1 => timestamp,                     ; timestamp: Event timestamp
+    2 => pump-event,                    ; type: Event type
+    ? 3 => int,                         ; rate: Current pump rate (ms)
+}
+
+glow-data-payload = {
+    0 => glow-index,                    ; glow: Glow plug index
+    1 => timestamp,                     ; timestamp: Status timestamp
+    2 => bool,                          ; lit: Lit status
+}
+
+temp-data-payload = {
+    0 => thermometer-index,             ; thermometer: Thermometer index
+    1 => timestamp,                     ; timestamp: Reading timestamp
+    2 => float,                         ; reading: Temperature in Celsius
+    ? 3 => bool,                        ; temperature-rpm-control: Temperature-based RPM control active
+    ? 4 => int,                         ; watched-motor: Motor being controlled
+    ? 5 => float,                       ; target-temperature: Target temperature for PID
+}
+
+device-announce-payload = {
+    0 => uint .size 1,                  ; motor-count: Number of motors
+    1 => uint .size 1,                  ; thermometer-count: Number of temperature sensors
+    2 => uint .size 1,                  ; pump-count: Number of pumps
+    3 => uint .size 1,                  ; glow-count: Number of glow plugs
+}
+
+ping-response-payload = {
+    0 => timestamp,                     ; uptime-ms: System uptime in ms
+}
+
+; ===========================================================================
+; Error Message Payloads (0xE0-0xEF)
+; ===========================================================================
+
+error-invalid-cmd-payload = {
+    0 => int,                           ; error-code: 1 = invalid param, 2 = invalid device index
+}
+
+error-state-reject-payload = {
+    0 => state,                         ; error-code: State that rejected the command
+}

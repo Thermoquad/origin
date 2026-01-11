@@ -10,10 +10,11 @@ Overview
 
 :ref:`Controllers <fusain-device-roles>` can act as :ref:`routers <fusain-device-roles>` to forward commands and data between other
 controllers and :ref:`appliances <fusain-device-roles>` across different physical layers (WiFi, Bluetooth,
-TCP ↔ LIN, RS-485).
+TCP ↔ LIN, RS-485). For physical layer specifications, see :doc:`physical-layer`.
 
 **Use Case:** A remote controller wants to control or monitor an appliance
-through an intermediate controller that has physical connectivity.
+through an intermediate controller that has physical connectivity. For network
+transports, see :doc:`tcp` and :doc:`websocket`.
 
 .. code-block:: text
 
@@ -159,9 +160,10 @@ two levels of ping in a routed topology:
 Hardware Bus Constraint
 -----------------------
 
-A hardware bus (LIN, RS-485, plain UART) supports only ONE controller. The
-controller connected to the hardware bus is responsible for maintaining the
-ping cycle with ALL appliances on that bus.
+A hardware bus (LIN, RS-485, plain UART) supports only ONE controller (see
+:doc:`physical-layer` for bus specifications). The controller connected to the
+hardware bus is responsible for maintaining the ping cycle with ALL appliances
+on that bus.
 
 In a routed topology, the router is the controller on the hardware bus and MUST
 send :ref:`PING_REQUEST <msg-ping-request>` to appliances to maintain their

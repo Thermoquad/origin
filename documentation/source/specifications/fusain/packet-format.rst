@@ -26,12 +26,9 @@ All packets follow this structure:
    * - ADDRESS
      - 8 bytes
      - 64-bit device address (little-endian)
-   * - MSG_TYPE
-     - 1 byte
-     - Message type identifier
    * - PAYLOAD
      - 0–114 bytes
-     - Message-specific data
+     - CBOR-encoded message (includes type and data)
    * - CRC
      - 2 bytes
      - CRC-16-CCITT checksum (big-endian)
@@ -39,7 +36,13 @@ All packets follow this structure:
      - 1 byte
      - End delimiter (``0x7F``)
 
-**Packet Size:** 14 bytes overhead + payload = 14–128 bytes total.
+**Packet Size:** 13 bytes overhead + payload = 13–127 bytes total. For buffer
+sizing, see :ref:`impl-buffers`.
+
+**Payload Structure:** The CBOR payload is encoded as a two-element array
+``[type, data]`` where ``type`` is the message type identifier (see
+:doc:`messages`) and ``data`` is a CBOR map with message-specific fields
+(see :doc:`packet-payloads`).
 
 
 Addressing
@@ -109,15 +112,114 @@ Fusain uses CRC-16-CCITT for error detection.
 
 **Coverage**
 
-The CRC is calculated over: LENGTH + ADDRESS + MSG_TYPE + PAYLOAD.
+The CRC is calculated over: LENGTH + ADDRESS + PAYLOAD.
 
 The START and END delimiters are NOT included in the CRC calculation.
 
 **Byte Order**
 
-The CRC MUST be transmitted big-endian (MSB first, then LSB). This is the only
-field transmitted in big-endian order; all other multi-byte fields use
-little-endian.
+The CRC MUST be transmitted big-endian (MSB first, then LSB).
+
+
+Byte Order Rationale
+====================
+
+The framing layer uses two byte orders:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 25 50
+
+   * - Field
+     - Byte Order
+     - Rationale
+   * - ADDRESS
+     - Little-endian
+     - Native byte order for ARM Cortex-M and x86 processors
+   * - CRC
+     - Big-endian
+     - Historical convention from CRC-16-CCITT telecommunications usage
+
+**Why little-endian for ADDRESS?**
+
+The target platforms (RP2350 ARM Cortex-M33, x86 desktop tools) are little-endian.
+Using native byte order allows direct memory access without byte-swapping:
+
+.. code-block:: c
+
+   // Direct read - no conversion needed on little-endian hardware
+   uint64_t address = *(uint64_t*)&packet->address;
+
+**Why big-endian for CRC?**
+
+CRC-16-CCITT originated in ITU-T telecommunications standards (X.25, HDLC) where
+network byte order (big-endian) was the convention. Many protocols follow this:
+
+- HDLC, SDLC - Big-endian CRC
+- PPP Frame Check Sequence - Big-endian CRC
+- Kermit, XMODEM - Big-endian CRC
+
+Maintaining this convention ensures compatibility with existing CRC implementations
+and aligns with developer expectations for CRC-16-CCITT.
+
+
+CRC Selection Rationale
+=======================
+
+Fusain uses CRC-16-CCITT for error detection. This section documents the rationale
+for this choice.
+
+**Hamming Distance Performance**
+
+Based on `Koopman's CRC research <https://users.ece.cmu.edu/~koopman/crc/>`_:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 30 45
+
+   * - Hamming Distance
+     - Max Data Length
+     - Error Detection
+   * - HD=4
+     - 32,751 bits (~4KB)
+     - All 1, 2, 3-bit errors
+   * - HD=5
+     - 241 bits (~30 bytes)
+     - All 1-4 bit errors
+   * - HD=6
+     - 135 bits (~17 bytes)
+     - All 1-5 bit errors
+
+For Fusain packets (max ~260 bytes = 2,080 bits), CRC-16-CCITT provides:
+
+- **HD=4**: Detects all 1, 2, and 3-bit errors
+- Burst error detection: Any burst ≤16 bits
+- Undetected error probability: ~1/65,536 for random errors
+
+**Why CRC-16-CCITT Is Appropriate**
+
+1. **Sufficient for Packet Sizes**: Fusain packets are well under the 32,751-bit
+   HD=4 limit.
+
+2. **Industry Standard**: CRC-16-CCITT is widely used in embedded protocols
+   (X.25, HDLC, Bluetooth, PPP).
+
+3. **Zephyr Native Support**: Zephyr provides optimized implementations via
+   ``crc16_itu_t()``. See :ref:`impl-zephyr` for integration details.
+
+4. **Low Overhead**: 2 bytes per packet is acceptable for our message sizes.
+
+**Alternative Consideration**
+
+For applications requiring stronger error detection, CRC-32K/4.2 (Koopman
+polynomial 0x93A409EB) provides HD=6 at packet sizes up to ~770 bytes. This
+could be adopted as a future enhancement if needed for noisier environments
+or safety certification.
+
+**References**
+
+- `Koopman CRC Zoo <https://users.ece.cmu.edu/~koopman/crc/>`_
+- `CRC Polynomial Selection for Embedded Networks <https://users.ece.cmu.edu/~koopman/roses/dsn04/koopman04_crc_poly_embedded.pdf>`_
 
 
 .. _byte-stuffing:
@@ -151,11 +253,12 @@ applied to all bytes between START and END.
 
 When transmitting:
 
-1. Build the packet (LENGTH, ADDRESS, MSG_TYPE, PAYLOAD)
-2. Calculate CRC over the packet
-3. Append CRC to the packet
-4. Apply byte stuffing to the entire packet (including CRC)
-5. Add START delimiter before and END delimiter after
+1. Encode the message as CBOR (type + data map)
+2. Build the packet (LENGTH, ADDRESS, CBOR payload)
+3. Calculate CRC over the packet
+4. Append CRC to the packet
+5. Apply byte stuffing to the entire packet (including CRC)
+6. Add START delimiter before and END delimiter after
 
 When receiving:
 
@@ -166,15 +269,21 @@ When receiving:
 
 3. Apply byte unstuffing
 4. Extract CRC from the unstuffed data
-5. Verify CRC over LENGTH + ADDRESS + MSG_TYPE + PAYLOAD
-6. Process the packet if CRC is valid
+5. Verify CRC over LENGTH + ADDRESS + PAYLOAD
+6. Decode CBOR payload to extract message type and data
+7. Process the message if CRC is valid
 
 
 Data Types
 **********
 
-Multi-byte integers in the payload use little-endian byte order. For encoding
-details and examples, see :ref:`impl-data-types` in the Implementation Guide.
+Payloads use CBOR encoding. The canonical schema is defined in ``fusain.cddl``.
+For implementation details, see :doc:`implementation`. For communication
+patterns and telemetry, see :doc:`communication-patterns`.
+
+**Framing Layer Types**
+
+These fixed-size types are used in the packet framing (not CBOR-encoded):
 
 .. list-table::
    :header-rows: 1
@@ -182,15 +291,30 @@ details and examples, see :ref:`impl-data-types` in the Implementation Guide.
 
    * - Type
      - Encoding
-   * - u8
-     - Unsigned 8-bit integer
-   * - i8
-     - Signed 8-bit integer
-   * - i32
-     - Signed 32-bit integer, little-endian
-   * - u32
-     - Unsigned 32-bit integer, little-endian
-   * - u64
+   * - ADDRESS
      - Unsigned 64-bit integer, little-endian
-   * - f64
-     - IEEE 754 double-precision float, little-endian
+   * - CRC
+     - Unsigned 16-bit integer, big-endian
+
+**CBOR Payload Types**
+
+Message payloads use CBOR's self-describing encoding:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Type
+     - CBOR Encoding
+   * - uint
+     - Variable-length unsigned integer (1-9 bytes depending on value)
+   * - int
+     - Variable-length signed integer
+   * - float
+     - IEEE 754 float (half, single, or double precision)
+   * - bool
+     - Single byte: ``0xF4`` (false) or ``0xF5`` (true)
+   * - tstr
+     - UTF-8 text string with length prefix
+   * - nil
+     - Single byte: ``0xF6`` (null/empty payload)

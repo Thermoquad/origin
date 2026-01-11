@@ -2,7 +2,7 @@ Physical Layer
 ##############
 
 This document specifies the physical layer options for Fusain protocol
-communication.
+communication. For network-based transports, see :doc:`tcp` and :doc:`websocket`.
 
 
 Overview
@@ -10,7 +10,8 @@ Overview
 
 Fusain uses UART-based packet framing and supports multiple physical layer
 transports. The protocol remains unchanged across all physical layers—transceiver
-ICs handle the adaptation between Fusain packets and the physical bus.
+ICs handle the adaptation between Fusain packets and the physical bus. For
+routing between physical layers, see :doc:`packet-routing`.
 
 .. list-table::
    :header-rows: 1
@@ -289,7 +290,8 @@ This ensures the bus idles in a defined state.
 Collision Avoidance
 -------------------
 
-Fusain requires software collision avoidance on RS-485:
+Fusain requires software collision avoidance on RS-485. See
+:doc:`communication-patterns` for polling mode usage.
 
 1. **Discovery Phase**
 

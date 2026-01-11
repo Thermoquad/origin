@@ -2,7 +2,8 @@ Message Types
 #############
 
 This document specifies the behavior, validation, and semantics of each Fusain
-message type. For payload encoding details, see :doc:`packet-payloads`.
+message type. For payload encoding details, see :doc:`packet-payloads`. For
+communication patterns, see :doc:`communication-patterns`.
 
 .. note::
 
@@ -48,27 +49,27 @@ Configure motor controller parameters including PWM, PID gains, and RPM limits.
    * - motor
      - int
      - Motor index (0 to motor_count-1)
-   * - pwm_period
+   * - pwm_period (optional)
      - int
-     - PWM period in microseconds
-   * - pid_kp
+     - PWM period in nanoseconds. If absent, use firmware default.
+   * - pid_kp (optional)
      - decimal
-     - Proportional gain for :term:`PID controller`
-   * - pid_ki
+     - Proportional gain for :term:`PID controller`. If absent, use firmware default.
+   * - pid_ki (optional)
      - decimal
-     - Integral gain for :term:`PID controller`
-   * - pid_kd
+     - Integral gain for :term:`PID controller`. If absent, use firmware default.
+   * - pid_kd (optional)
      - decimal
-     - Derivative gain for :term:`PID controller`
-   * - max_rpm
+     - Derivative gain for :term:`PID controller`. If absent, use firmware default.
+   * - max_rpm (optional)
      - int
-     - Maximum achievable RPM
-   * - min_rpm
+     - Maximum achievable RPM. If absent, use firmware default.
+   * - min_rpm (optional)
      - int
-     - Minimum stable RPM
-   * - min_pwm_duty
+     - Minimum stable RPM. If absent, use firmware default.
+   * - min_pwm_duty (optional)
      - int
-     - Minimum PWM pulse width in microseconds
+     - Minimum PWM pulse width in nanoseconds. If absent, use firmware default.
 
 **Default Values**
 
@@ -79,7 +80,7 @@ Configure motor controller parameters including PWM, PID gains, and RPM limits.
    * - Field
      - Default
    * - pwm_period
-     - 50 μs (20 kHz)
+     - 50000 ns (20 kHz)
    * - pid_kp
      - 4.0
    * - pid_ki
@@ -91,14 +92,15 @@ Configure motor controller parameters including PWM, PID gains, and RPM limits.
    * - min_rpm
      - 800
    * - min_pwm_duty
-     - 10 μs
+     - 10000 ns
 
 **Validation**
 
 - motor MUST be within device capability (0 to motor_count-1)
-- pwm_period MUST be > 0
-- max_rpm MUST be > min_rpm
-- min_pwm_duty MUST be < pwm_period
+- At least one optional field MUST be present (motor index alone is invalid)
+- If present, pwm_period MUST be > 0
+- If both present, max_rpm MUST be > min_rpm
+- If both present, min_pwm_duty MUST be < pwm_period
 - PID gains MAY be 0 (disables that term)
 - PID gains MUST NOT be NaN or Infinity
 
@@ -129,12 +131,12 @@ Configure fuel pump parameters including pulse duration and recovery time.
    * - pump
      - int
      - Pump index (0 to pump_count-1)
-   * - pulse_ms
+   * - pulse_ms (optional)
      - int
-     - Solenoid pulse duration in milliseconds
-   * - recovery_ms
+     - Solenoid pulse duration in milliseconds. If absent, use firmware default.
+   * - recovery_ms (optional)
      - int
-     - Recovery time after pulse in milliseconds
+     - Recovery time after pulse in milliseconds. If absent, use firmware default.
 
 **Default Values**
 
@@ -152,8 +154,9 @@ Configure fuel pump parameters including pulse duration and recovery time.
 **Validation**
 
 - pump MUST be within device capability (0 to pump_count-1)
-- pulse_ms MUST be > 0
-- recovery_ms MUST be > 0
+- At least one optional field MUST be present (pump index alone is invalid)
+- If present, pulse_ms MUST be > 0
+- If present, recovery_ms MUST be > 0
 - Minimum pump rate = pulse_ms + recovery_ms
 
 **Errors**
@@ -172,7 +175,7 @@ Configure fuel pump parameters including pulse duration and recovery time.
 TEMPERATURE_CONFIG
 ------------------
 
-Configure temperature controller parameters including PID gains and sampling.
+Configure temperature controller PID gains.
 
 | **Payload:** :ref:`TEMPERATURE_CONFIG <payload-temperature-config>`
 
@@ -185,24 +188,18 @@ Configure temperature controller parameters including PID gains and sampling.
    * - Field
      - Type
      - Description
-   * - temperature
+   * - thermometer
      - int
-     - Temperature sensor index (0 to temperature_count-1)
-   * - pid_kp
+     - Temperature sensor index (0 to thermometer_count-1)
+   * - pid_kp (optional)
      - decimal
-     - Proportional gain for :term:`PID controller`
-   * - pid_ki
+     - Proportional gain for :term:`PID controller`. If absent, use firmware default.
+   * - pid_ki (optional)
      - decimal
-     - Integral gain for :term:`PID controller`
-   * - pid_kd
+     - Integral gain for :term:`PID controller`. If absent, use firmware default.
+   * - pid_kd (optional)
      - decimal
-     - Derivative gain for :term:`PID controller`
-   * - sample_count
-     - int
-     - Number of samples for moving average filter
-   * - read_rate
-     - int
-     - Temperature reading interval in milliseconds
+     - Derivative gain for :term:`PID controller`. If absent, use firmware default.
 
 **Default Values**
 
@@ -218,28 +215,21 @@ Configure temperature controller parameters including PID gains and sampling.
      - 10.0
    * - pid_kd
      - 5.0
-   * - sample_count
-     - 60
-   * - read_rate
-     - 50 ms
 
 **Validation**
 
-- temperature MUST be within device capability (0 to temperature_count-1)
-- sample_count MUST be > 0
-- read_rate MUST be > 0
+- thermometer MUST be within device capability (0 to thermometer_count-1)
+- At least one optional field MUST be present (thermometer index alone is invalid)
 - PID gains MAY be 0 (disables that term)
 - PID gains MUST NOT be NaN or Infinity
 
 **Errors**
 
-- Invalid temperature index: ERROR_INVALID_CMD (code 2)
+- Invalid thermometer index: ERROR_INVALID_CMD (code 2)
 - Invalid parameter value: ERROR_INVALID_CMD (code 1)
 
 **Rationale**
 
-- Moving average filter reduces sensor noise
-- Warmup time = sample_count × read_rate (60 × 50ms = 3 seconds)
 - PID gains tuned for inverted control (higher temperature → higher RPM)
 
 
@@ -264,9 +254,9 @@ Configure :term:`glow plug` parameters.
    * - glow
      - int
      - Glow plug index (0 to glow_count-1)
-   * - max_duration
+   * - max_duration (optional)
      - int
-     - Maximum allowed glow duration in milliseconds
+     - Maximum allowed glow duration in milliseconds. If absent, use firmware default.
 
 **Default Values**
 
@@ -282,7 +272,8 @@ Configure :term:`glow plug` parameters.
 **Validation**
 
 - glow MUST be within device capability (0 to glow_count-1)
-- max_duration MUST be > 0
+- At least one optional field MUST be present (glow index alone is invalid)
+- If present, max_duration MUST be > 0
 - RECOMMENDED: max_duration ≤ 300000 ms (5 minutes) for safety
 
 **Errors**
@@ -398,7 +389,8 @@ If no subscription exists, the command is silently ignored.
 TELEMETRY_CONFIG
 ----------------
 
-Enable or disable periodic telemetry broadcasts.
+Enable or disable periodic telemetry broadcasts. See :doc:`communication-patterns`
+for usage patterns.
 
 | **Payload:** :ref:`TELEMETRY_CONFIG <payload-telemetry-config>`
 
@@ -411,7 +403,7 @@ Enable or disable periodic telemetry broadcasts.
    * - Field
      - Type
      - Description
-   * - telemetry_enabled
+   * - enabled
      - bool
      - Enable (true) or disable (false) telemetry broadcasts
    * - interval_ms
@@ -430,7 +422,7 @@ Telemetry broadcasts are **disabled** on boot.
 
 **Behavior**
 
-When telemetry_enabled is true:
+When enabled is true:
 
 - **Broadcast mode** (interval_ms > 0): Appliance automatically sends telemetry
   at the configured interval
@@ -594,9 +586,9 @@ Set system operating mode.
    * - mode
      - enum
      - Operating mode (see values below)
-   * - argument
+   * - argument (optional)
      - int
-     - Mode-specific parameter
+     - Mode-specific parameter. If absent, use mode-specific default (see below).
 
 **Mode Values**
 
@@ -606,19 +598,21 @@ Set system operating mode.
 
    * - Value
      - Mode
-     - Argument
+     - Argument (if present)
    * - 0
      - IDLE
-     - Ignored (set to 0)
+     - Ignored
    * - 1
      - FAN
-     - Target RPM (0 or min_rpm to max_rpm)
+     - Target RPM (0 or min_rpm to max_rpm). If absent, use last commanded RPM
+       or motor's default RPM.
    * - 2
      - HEAT
-     - Pump rate in milliseconds
-   * - 3
+     - Pump rate in milliseconds. If absent, use last commanded rate or pump's
+       default rate.
+   * - 255
      - EMERGENCY
-     - Ignored (set to 0)
+     - Ignored
 
 **Mode → State Mapping**
 
@@ -638,13 +632,13 @@ Set system operating mode.
    * - HEAT (2)
      - PREHEAT → PREHEAT_STAGE_2 → HEATING
      - Progresses through heating sequence
-   * - EMERGENCY (3)
+   * - EMERGENCY (255)
      - E_STOP
      - Requires power cycle to exit
 
 **Validation**
 
-- mode values > 3: ERROR_INVALID_CMD (code 1)
+- mode values 3–254: ERROR_INVALID_CMD (code 1)
 - FAN mode: argument 1 to (min_rpm-1) is invalid: ERROR_INVALID_CMD (code 1)
 - HEAT mode: argument 1 to (pulse_ms + recovery_ms - 1) is invalid: ERROR_INVALID_CMD (code 1)
 - HEAT mode: argument > max_pump_rate is invalid: ERROR_INVALID_CMD (code 1)
@@ -794,18 +788,19 @@ Configure temperature controller operation.
    * - Field
      - Type
      - Description
-   * - temperature
+   * - thermometer
      - int
-     - Temperature sensor index (0 to temperature_count-1)
+     - Temperature sensor index (0 to thermometer_count-1)
    * - type
      - enum
      - Command type (see values below)
-   * - motor_index
+   * - motor_index (optional)
      - int
-     - Motor to control (WATCH_MOTOR only)
-   * - target_temperature
+     - Motor to control. Required for WATCH_MOTOR; ignored otherwise.
+   * - target_temperature (optional)
      - decimal
-     - Target temperature in Celsius (SET_TARGET only)
+     - Target temperature in Celsius. Required for SET_TARGET_TEMPERATURE;
+       ignored otherwise.
 
 **Command Types**
 
@@ -835,7 +830,7 @@ Configure temperature controller operation.
 **Validation**
 
 - type values > 4: ERROR_INVALID_CMD (code 1)
-- temperature MUST be within device capability
+- thermometer MUST be within device capability
 - motor_index (for WATCH_MOTOR) MUST be valid
 - target_temperature MUST NOT be NaN or Infinity
 
@@ -850,7 +845,8 @@ state. Other states return ERROR_STATE_REJECT.
 SEND_TELEMETRY
 --------------
 
-Request specific telemetry data from an appliance (polling mode).
+Request specific telemetry data from an appliance (polling mode). Polling mode
+is recommended for multi-appliance RS-485 networks; see :doc:`physical-layer`.
 
 | **Payload:** :ref:`SEND_TELEMETRY <payload-send-telemetry>`
 
@@ -866,9 +862,10 @@ Request specific telemetry data from an appliance (polling mode).
    * - telemetry_type
      - enum
      - Type of telemetry to request (see values below)
-   * - index
+   * - index (optional)
      - int
-     - Peripheral index or 0xFFFFFFFF for all
+     - Peripheral index. If absent or 0xFFFFFFFF, request all peripherals
+       of the specified type.
 
 **Telemetry Types**
 
@@ -913,7 +910,8 @@ Request specific telemetry data from an appliance (polling mode).
 PING_REQUEST
 ------------
 
-Connectivity check and heartbeat.
+Connectivity check and heartbeat. See :doc:`communication-patterns` for
+heartbeat and timeout behavior.
 
 | **Payload:** :ref:`PING_REQUEST <payload-ping-request>` (0 bytes)
 
@@ -1102,18 +1100,18 @@ Motor telemetry including RPM and PWM feedback.
    * - target
      - int
      - Target RPM setpoint
-   * - max_rpm
+   * - max_rpm (optional)
      - int
-     - Maximum achievable RPM
-   * - min_rpm
+     - Maximum achievable RPM. If absent, information not reported.
+   * - min_rpm (optional)
      - int
-     - Minimum stable RPM
-   * - pwm
+     - Minimum stable RPM. If absent, information not reported.
+   * - pwm (optional)
      - int
-     - Current PWM pulse width in microseconds
-   * - pwm_max
+     - Current PWM pulse width in nanoseconds. If absent, information not reported.
+   * - pwm_max (optional)
      - int
-     - PWM period in microseconds
+     - PWM period in nanoseconds. If absent, information not reported.
 
 
 .. _msg-pump-data:
@@ -1144,9 +1142,10 @@ Fuel pump status and events.
    * - type
      - enum
      - Event type (see values below)
-   * - rate
+   * - rate (optional)
      - int
-     - Current pump rate in milliseconds
+     - Current pump rate in milliseconds. If absent, rate not applicable
+       for this event type (e.g., INITIALIZING, READY, ERROR).
 
 **Event Types**
 
@@ -1232,7 +1231,7 @@ Temperature sensor readings and PID control status.
    * - Field
      - Type
      - Description
-   * - temperature
+   * - thermometer
      - int
      - Temperature sensor index
    * - timestamp
@@ -1241,15 +1240,15 @@ Temperature sensor readings and PID control status.
    * - reading
      - decimal
      - Current temperature in Celsius
-   * - temperature_rpm_control
+   * - temperature_rpm_control (optional)
      - bool
-     - Temperature-based RPM control active
-   * - watched_motor
+     - Temperature-based RPM control active. If absent, RPM control is not active.
+   * - watched_motor (optional)
      - int
-     - Motor being controlled (-1 = none)
-   * - target_temperature
+     - Motor being controlled. If absent, no motor is being controlled.
+   * - target_temperature (optional)
      - decimal
-     - Target temperature for PID control
+     - Target temperature for PID control. If absent, no target is set.
 
 **Invalid Reading Handling**
 
@@ -1279,7 +1278,7 @@ Device capabilities announcement.
    * - motor_count
      - int
      - Number of motors (1-255)
-   * - temperature_count
+   * - thermometer_count
      - int
      - Number of temperature sensors (1-255)
    * - pump_count
@@ -1419,6 +1418,11 @@ Command validation failed.
    * - 2
      - Invalid device index (motor, pump, or sensor does not exist)
 
+.. note::
+
+   A mechanism to identify which specific field caused the validation error is
+   planned for future expansion.
+
 
 .. _msg-error-state-reject:
 
@@ -1451,3 +1455,8 @@ Controllers should handle ERROR_STATE_REJECT by either:
 
 - Waiting for the appliance to reach an appropriate state
 - Retrying the command after addressing the state conflict
+
+.. note::
+
+   A mechanism to communicate the specific reason why the state rejected the
+   command is planned for future expansion.

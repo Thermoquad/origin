@@ -32,11 +32,12 @@ jobs:
           cache-dependency-path: documentation/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r documentation/requirements.txt
+        working-directory: documentation
+        run: task install
 
       - name: Build documentation
         working-directory: documentation
-        run: task html
+        run: task ci
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

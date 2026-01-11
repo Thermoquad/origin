@@ -3,7 +3,8 @@ Implementation Guide
 
 This guide covers implementing the :term:`Fusain` protocol in firmware and software
 applications. For protocol specification, see :doc:`packet-format`. For message
-definitions, see :doc:`messages`.
+definitions, see :doc:`messages`. For communication patterns and telemetry, see
+:doc:`communication-patterns`.
 
 
 .. _impl-buffers:
@@ -26,10 +27,10 @@ The receive buffer holds stuffed bytes between START and END delimiters.
 
    * - Calculation
      - Size
-   * - Unstuffed content (128-byte packet minus START and END delimiters)
-     - 128 − 2 = 126 bytes
+   * - Unstuffed content (127-byte packet minus START and END delimiters)
+     - 127 − 2 = 125 bytes
    * - Worst-case stuffing (every byte escaped)
-     - 126 × 2 = 252 bytes
+     - 125 × 2 = 250 bytes
    * - **Minimum buffer size**
      - **256 bytes**
 
@@ -50,9 +51,9 @@ The transmit buffer holds the encoded packet before transmission.
    * - Calculation
      - Size
    * - Maximum packet size
-     - 128 bytes
+     - 127 bytes
    * - Worst-case stuffing
-     - 252 bytes
+     - 250 bytes
    * - START and END delimiters
      - 2 bytes
    * - **Minimum buffer size**
@@ -109,7 +110,7 @@ timeout timer. Other commands (:ref:`STATE_COMMAND <msg-state-command>`,
 etc.) do NOT reset the timer.
 
 Controllers SHOULD send :ref:`PING_REQUEST <msg-ping-request>` every 10–15 seconds
-to maintain communication.
+to maintain communication. For physical layer timing, see :doc:`physical-layer`.
 
 
 Byte Synchronization
@@ -149,10 +150,8 @@ States
      - Reading LENGTH byte
    * - READ_ADDRESS
      - Reading 8-byte ADDRESS field
-   * - READ_TYPE
-     - Reading MSG_TYPE byte
    * - READ_PAYLOAD
-     - Reading PAYLOAD bytes (length from LENGTH field)
+     - Reading CBOR payload bytes (length from LENGTH field)
    * - READ_CRC
      - Reading 2-byte CRC field
    * - WAIT_END
@@ -176,10 +175,6 @@ State Transitions
        |
        | [8 bytes received]
        v
-   READ_TYPE
-       |
-       | [MSG_TYPE byte received]
-       v
    READ_PAYLOAD
        |
        | [LENGTH bytes received]
@@ -190,7 +185,7 @@ State Transitions
        v
    WAIT_END
        |
-       | [0x7F received] → Validate CRC → Process packet
+       | [0x7F received] → Validate CRC → Decode CBOR → Process message
        v
    WAIT_START
 
@@ -246,22 +241,23 @@ The packet encoder builds a complete packet for transmission.
 Encoding Steps
 --------------
 
-1. Build the unstuffed packet:
+1. Encode the message as CBOR: ``[type, payload_map]``
 
-   - LENGTH (1 byte): payload length
+2. Build the unstuffed packet:
+
+   - LENGTH (1 byte): CBOR payload length
    - ADDRESS (8 bytes): destination or source address
-   - MSG_TYPE (1 byte): message type identifier
-   - PAYLOAD (0–114 bytes): message data
+   - PAYLOAD (0–114 bytes): CBOR-encoded message
 
-2. Calculate CRC-16-CCITT over the unstuffed packet
+3. Calculate CRC-16-CCITT over the unstuffed packet
 
-3. Append CRC (2 bytes, big-endian: MSB first, then LSB)
+4. Append CRC (2 bytes, big-endian: MSB first, then LSB)
 
-4. Apply byte stuffing to all bytes (LENGTH through CRC)
+5. Apply byte stuffing to all bytes (LENGTH through CRC)
 
-5. Add START delimiter (``0x7E``) before stuffed data
+6. Add START delimiter (``0x7E``) before stuffed data
 
-6. Add END delimiter (``0x7F``) after stuffed data
+7. Add END delimiter (``0x7F``) after stuffed data
 
 
 Byte Stuffing
@@ -501,69 +497,204 @@ controller has NOT received a corresponding broadcast data message.
    :ref:`TELEMETRY_CONFIG <msg-telemetry-config>`
 
 
-.. _impl-data-types:
+.. _impl-cbor:
 
-Data Type Encoding
+CBOR Encoding
+*************
+
+Fusain payloads use CBOR (Concise Binary Object Representation) encoding.
+The canonical schema is defined in ``fusain.cddl``.
+
+Message Structure
+-----------------
+
+All messages are encoded as a CBOR array with two elements:
+
+.. code-block:: text
+
+   [type, payload]
+
+- **type**: Message type identifier (uint, e.g., ``0x30`` for STATE_DATA)
+- **payload**: CBOR map with integer keys, or ``nil`` for empty payloads
+
+Example STATE_DATA encoding:
+
+.. code-block:: text
+
+   [0x30, {0: false, 1: 0, 2: 1, 3: 12345}]
+
+   CBOR bytes: 82 18 30 A4 00 F4 01 00 02 01 03 19 30 39
+
+zcbor Integration (Zephyr)
+--------------------------
+
+For Zephyr builds, use zcbor for CBOR encoding/decoding. Enable in Kconfig:
+
+.. code-block:: kconfig
+
+   CONFIG_ZCBOR=y
+   CONFIG_ZCBOR_CANONICAL=y
+
+Generate encode/decode functions from the CDDL schema:
+
+.. code-block:: cmake
+
+   zcbor_generate(
+     fusain_cbor
+     ${CMAKE_CURRENT_SOURCE_DIR}/fusain.cddl
+     ${CMAKE_CURRENT_BINARY_DIR}/generated
+     --decode --encode
+   )
+
+Usage example:
+
+.. code-block:: c
+
+   #include "fusain_cbor_types.h"
+   #include "fusain_cbor_encode.h"
+
+   int fusain_encode_state_data(uint8_t *buf, size_t buf_size,
+                                bool error, int code, int state, uint32_t ts)
+   {
+       ZCBOR_STATE_E(zs, 1, buf, buf_size, 1);
+
+       bool ok = zcbor_list_start_encode(zs, 2);
+       ok = ok && zcbor_uint32_put(zs, 0x30);  // MSG_STATE_DATA
+
+       ok = ok && zcbor_map_start_encode(zs, 4);
+       ok = ok && zcbor_uint32_put(zs, 0) && zcbor_bool_put(zs, error);
+       ok = ok && zcbor_uint32_put(zs, 1) && zcbor_int32_put(zs, code);
+       ok = ok && zcbor_uint32_put(zs, 2) && zcbor_uint32_put(zs, state);
+       ok = ok && zcbor_uint32_put(zs, 3) && zcbor_uint32_put(zs, ts);
+       ok = ok && zcbor_map_end_encode(zs, 4);
+
+       ok = ok && zcbor_list_end_encode(zs, 2);
+
+       return ok ? (buf_size - zs->payload_end + zs->payload) : -1;
+   }
+
+
+.. _impl-zephyr:
+
+Zephyr Integration
 ******************
 
-All multi-byte integers MUST use **little-endian** byte order.
+For Zephyr RTOS builds, these subsystems are recommended for Fusain
+implementations.
 
-All payload structures MUST be explicitly **packed** (no padding between
-fields). Use compiler-specific attributes:
+CRC Implementation
+------------------
 
-- GCC/Clang: ``__attribute__((packed))``
-- MSVC: ``#pragma pack(1)``
+Use Zephyr's native CRC in Zephyr mode:
+
+.. code-block:: c
+
+   #ifdef CONFIG_ZEPHYR
+     #include <zephyr/sys/crc.h>
+     #define fusain_crc16(data, len) crc16_itu_t(0xFFFF, data, len)
+   #else
+     uint16_t fusain_crc16(const uint8_t *data, size_t len);
+   #endif
+
+Buffer Management
+-----------------
+
+Use ``net_buf`` for packet buffer management:
+
+.. code-block:: c
+
+   #include <zephyr/net/buf.h>
+
+   NET_BUF_POOL_DEFINE(fusain_pool, 8, FUSAIN_MAX_PACKET_SIZE, 0, NULL);
+
+   struct net_buf *buf = net_buf_alloc(&fusain_pool, K_NO_WAIT);
+   // ... use buffer ...
+   net_buf_unref(buf);
+
+Benefits:
+
+- Pool-based allocation (no heap fragmentation)
+- Reference counting for safe buffer sharing
+- Consistent patterns across Zephyr subsystems
+
+Logging
+-------
+
+Register a logging module for debug output:
+
+.. code-block:: c
+
+   #include <zephyr/logging/log.h>
+   LOG_MODULE_REGISTER(fusain, CONFIG_FUSAIN_LOG_LEVEL);
+
+Add Kconfig for log level control:
+
+.. code-block:: kconfig
+
+   module = FUSAIN
+   module-str = Fusain Protocol
+   source "subsys/logging/Kconfig.template.log_config"
+
+Packet Reception Architecture
+-----------------------------
+
+For platforms using UART polling (such as RP2350), use a ring buffer for
+byte accumulation combined with a message queue for thread-safe packet handoff:
+
+.. code-block:: c
+
+   #include <zephyr/sys/ring_buffer.h>
+   #include <zephyr/net/buf.h>
+
+   RING_BUF_DECLARE(uart_rx_ring, 256);
+   K_MSGQ_DEFINE(packet_queue, sizeof(struct net_buf *), 8, 4);
+
+   // UART polling thread
+   void uart_poll_thread(void)
+   {
+       uint8_t byte;
+       while (1) {
+           while (uart_poll_in(uart_dev, &byte) == 0) {
+               ring_buf_put(&uart_rx_ring, &byte, 1);
+           }
+
+           struct net_buf *buf = try_extract_packet(&uart_rx_ring);
+           if (buf) {
+               k_msgq_put(&packet_queue, &buf, K_NO_WAIT);
+           }
+
+           k_sleep(K_MSEC(1));
+       }
+   }
+
+   // Processing thread
+   void process_thread(void)
+   {
+       struct net_buf *buf;
+       while (1) {
+           if (k_msgq_get(&packet_queue, &buf, K_FOREVER) == 0) {
+               fusain_decode_from_buf(buf, &msg);
+               net_buf_unref(buf);
+           }
+       }
+   }
+
+
+Framing Layer Types
+-------------------
+
+The framing layer (outside CBOR) uses fixed-size types:
 
 .. list-table::
    :header-rows: 1
-   :widths: 15 15 35 35
+   :widths: 20 80
 
-   * - Type
-     - Size
-     - Format
-     - Range
-   * - u8
-     - 1 byte
-     - Unsigned integer
-     - 0 to 255
-   * - i8
-     - 1 byte
-     - Signed integer
-     - −128 to 127
-   * - i32
-     - 4 bytes
-     - Signed integer, little-endian
-     - −2,147,483,648 to 2,147,483,647
-   * - u32
-     - 4 bytes
-     - Unsigned integer, little-endian
-     - 0 to 4,294,967,295
-   * - u64
-     - 8 bytes
-     - Unsigned integer, little-endian
-     - 0 to 18,446,744,073,709,551,615
-   * - f64
-     - 8 bytes
-     - IEEE 754 double, little-endian
-     - ±1.7×10³⁰⁸
-
-
-Encoding Examples
------------------
-
-**Float encoding (225.5°C):**
-
-.. code-block:: text
-
-   IEEE 754 double: 0x406C280000000000
-   Little-endian:   00 00 00 00 00 28 6C 40
-
-**Address encoding (0x123456789ABCDEF0):**
-
-.. code-block:: text
-
-   Big-endian (standard): 12 34 56 78 9A BC DE F0
-   Little-endian (wire):  F0 DE BC 9A 78 56 34 12
+   * - Field
+     - Encoding
+   * - ADDRESS
+     - 64-bit unsigned integer, little-endian
+   * - CRC
+     - 16-bit unsigned integer, big-endian
 
 
 Performance Characteristics

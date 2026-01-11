@@ -4,13 +4,17 @@ Overview
 ########
 
 :term:`Fusain` is the serial communication protocol used between Thermoquad devices.
+For message definitions, see :doc:`messages`. For implementation guidance, see
+:doc:`implementation`.
 
-Fusain Protocol v2.0 provides:
+Fusain provides:
 
 * Reliable packet framing with CRC-16-CCITT
 * Byte stuffing for data transparency
+* CBOR-encoded payloads with schema-driven validation
 * Telemetry bundles for efficient data transfer
 * Command/response messaging
+* Optional fields without padding bytes
 
 
 .. _fusain-device-roles:
@@ -71,11 +75,9 @@ remote clients).
 Data Types
 **********
 
-Fusain documentation uses two levels of type abstraction:
-
-- **High-level types** (:doc:`messages`) — Semantic types as decoded in
-  implementation structs
-- **Wire-level types** (:doc:`packet-payloads`) — Binary encoding on the wire
+Fusain payloads use CBOR (Concise Binary Object Representation) encoding with
+a CDDL schema for validation. The schema is defined in ``fusain.cddl``. For
+zcbor integration in Zephyr, see :ref:`impl-cbor`.
 
 Type Mapping
 ------------
@@ -85,21 +87,49 @@ Type Mapping
    :widths: 20 25 55
 
    * - High-Level
-     - Wire-Level
+     - CBOR Type
      - Notes
    * - bool
-     - u32
-     - 0 = false, non-zero = true.
+     - CBOR bool
+     - ``true`` (0xF5) or ``false`` (0xF4)
    * - int
-     - u8, i32, u32
-     - Signed or unsigned depending on field semantics. Small counts (1-255)
-       may use u8.
+     - CBOR uint/int
+     - Variable-length encoding. Small values (0-23) encode in 1 byte.
+       Wire-level docs (:doc:`packet-payloads`, CDDL) specify ``uint`` or
+       ``int`` based on signedness.
+   * - float
+     - CBOR float
+     - IEEE 754 single or double precision.
    * - decimal
-     - f64
-     - IEEE 754 double-precision float.
+     - CBOR float
+     - Alias for float. Used in :doc:`messages` for PID gains and temperatures.
+   * - timestamp
+     - CBOR uint
+     - 32-bit milliseconds since boot.
    * - enum
-     - u8, u32
-     - Integer with defined value set. Size varies by field.
+     - CBOR uint
+     - Integer with defined value set per CDDL schema.
 
-For the exact wire-level type of each field, see :doc:`packet-payloads`. All
-multi-byte values use little-endian byte order.
+For payload structure details, see :doc:`packet-payloads`. CBOR uses its own
+byte ordering (big-endian for multi-byte integers in the encoding).
+
+
+Implementation Notes
+********************
+
+Thermistor Support
+------------------
+
+The Fusain protocol transmits temperature values in degrees Celsius. The
+conversion from raw ADC readings to temperature is firmware-specific and not
+defined by the protocol. Implementations may support different thermistor
+types by using appropriate lookup tables or Steinhart-Hart coefficients.
+
+ADC filtering, smoothing, and sample averaging are also implementation details
+left to firmware. The protocol only specifies the temperature value format
+(CBOR float) and PID controller gains.
+
+.. note::
+
+   Protocol messages for configuring thermistor parameters (lookup tables,
+   Steinhart-Hart coefficients) are planned for future expansion.
