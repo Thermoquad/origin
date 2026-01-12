@@ -7,3 +7,4 @@ Guides for setting up a development environment for Thermoquad projects.
    :maxdepth: 2
 
    setup/index
+   research/index
