@@ -692,7 +692,7 @@ Roastee is a Progressive Web App built with TypeScript.
 
    For detailed technology stack decisions, see :doc:`roastee-web-stack`.
    That document covers framework selection, bundle size optimization, and
-   build configuration based on the embedded deployment constraints below.
+   build configuration based on measured experiment results.
 
 **Technology Stack:**
 

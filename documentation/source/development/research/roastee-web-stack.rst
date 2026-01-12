@@ -1,17 +1,26 @@
 Roastee Web Stack
 #################
 
-:Date: 2026-01-11
+:Date: 2026-01-12
 :Author: Thermoquad
-:Status: Research Complete
+:Status: Research Complete (Revised)
 
-.. note::
+.. warning::
 
-   **Development Status: Research Phase**
+   **Recommendations Revised Based on Experiments**
 
-   This document captures research findings and recommendations. Implementation
-   has not yet begun. The findings here will guide the development of the
-   Roastee PWA web stack.
+   The original recommendations in this document (Svelte 5, typesafe-i18n) have
+   been **superseded** by empirical testing. See :doc:`roastee-stack-tests-1`
+   for the authoritative results.
+
+   **Key Changes:**
+
+   - **Framework:** SolidJS (not Svelte 5) — Svelte 5 runes add unexpected overhead
+   - **i18n:** Minimal ``as const`` approach (not typesafe-i18n) — No library needed
+   - **Compression:** Brotli requires HTTPS; use gzip for HTTP deployments
+
+   The recommendations below represent the **original research hypothesis**.
+   Actual measurements contradicted several assumptions.
 
 .. contents:: Table of Contents
    :local:

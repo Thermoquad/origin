@@ -12,3 +12,4 @@ implementation planning for new features.
    rp2350-flash-usage
    user-onboarding
    roastee-web-stack
+   roastee-stack-tests-1
