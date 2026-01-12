@@ -379,6 +379,44 @@ ERROR_STATE_REJECT Examples
    CBOR: [0xE1, {0: 5, 1: 1}]
    Meaning: Rejected by HEATING state, resource controlled by state machine
 
+CDDL Schema
+***********
+
+The following CDDL excerpt defines the extended error message payloads. This
+updates the existing ``fusain.cddl`` schema.
+
+.. code-block:: cddl
+
+   ; ===========================================================================
+   ; Extended Error Message Payloads (0xE0-0xEF)
+   ; ===========================================================================
+
+   ; Constraint violation types for ERROR_INVALID_CMD
+   ; Values: 0=unspecified, 1=value-too-low, 2=value-too-high, 3=value-invalid,
+   ;         4=value-conflict, 5=index-not-found, 6=field-required,
+   ;         7=type-mismatch, 8=operation-blocked, 9=value-in-gap
+   constraint = uint .le 255
+
+   ; Rejection reasons for ERROR_STATE_REJECT
+   ; Values: 0=unspecified, 1=resource-controlled, 2=invalid-in-state,
+   ;         3=transition-blocked (reserved)
+   rejection-reason = uint .le 255
+
+   ; ERROR_INVALID_CMD (0xE0) - Extended payload
+   ; Replaces the original error-invalid-cmd-payload
+   error-invalid-cmd-payload = {
+       0 => int,                        ; error-code: 1=invalid param, 2=invalid index
+       ? 1 => uint,                     ; rejected-field: CBOR key that failed (optional)
+       ? 2 => constraint,               ; constraint: Violation type (optional)
+   }
+
+   ; ERROR_STATE_REJECT (0xE1) - Extended payload
+   ; Replaces the original error-state-reject-payload
+   error-state-reject-payload = {
+       0 => state,                      ; error-code: State that rejected the command
+       ? 1 => rejection-reason,         ; rejection-reason: Why rejected (optional)
+   }
+
 Payload Size Analysis
 *********************
 
