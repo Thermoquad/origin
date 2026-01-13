@@ -13,4 +13,6 @@ implementation planning for new features.
    user-onboarding
    roastee-web-stack
    roastee-stack-tests-1
+   roastee-stack-tests-2
    fusain-error-communication
+   fusain-ota-updates
