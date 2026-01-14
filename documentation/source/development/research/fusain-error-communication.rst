@@ -3,8 +3,8 @@ Fusain Error Communication
 
 :Date: 2026-01-12
 :Author: Thermoquad
-:Status: Research Complete
-:Related: :doc:`/specifications/fusain/messages`
+:Status: **Integrated** ✓
+:Related: :doc:`/specifications/fusain/messages`, :doc:`/specifications/fusain/packet-payloads`
 
 .. contents:: Table of Contents
    :local:

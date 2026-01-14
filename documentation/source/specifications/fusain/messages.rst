@@ -13,7 +13,7 @@ communication patterns, see :doc:`communication-patterns`.
    For wire-level encoding of each field, see :doc:`packet-payloads`.
 
 
-Configuration Commands (0x10–0x1F)
+Configuration Commands (0x10-0x1F)
 **********************************
 
 Configuration commands are sent from :ref:`controllers <fusain-device-roles>` to :ref:`appliances <fusain-device-roles>` to set
@@ -326,7 +326,7 @@ When a controller (router) receives this command:
 
 1. Associates the subscription with the connection on which it was received
 2. Adds the connection to the routing table for the specified appliance_address
-3. Forwards telemetry data messages (``0x30``–``0x34``) from that appliance
+3. Forwards telemetry data messages (``0x30``-``0x34``) from that appliance
 
 PING_RESPONSE (``0x3F``) and DEVICE_ANNOUNCE (``0x35``) are NOT forwarded.
 DEVICE_ANNOUNCE is only sent during discovery, not as ongoing telemetry.
@@ -544,7 +544,7 @@ For routing details, see :ref:`session-initiation`.
 :ref:`DEVICE_ANNOUNCE <msg-device-announce>` from each appliance (and router).
 
 
-Control Commands (0x20–0x2F)
+Control Commands (0x20-0x2F)
 ****************************
 
 Control commands provide real-time operational control without changing
@@ -638,7 +638,7 @@ Set system operating mode.
 
 **Validation**
 
-- mode values 3–254: ERROR_INVALID_CMD (code 1)
+- mode values 3-254: ERROR_INVALID_CMD (code 1)
 - FAN mode: argument 1 to (min_rpm-1) is invalid: ERROR_INVALID_CMD (code 1)
 - HEAT mode: argument 1 to (pulse_ms + recovery_ms - 1) is invalid: ERROR_INVALID_CMD (code 1)
 - HEAT mode: argument > max_pump_rate is invalid: ERROR_INVALID_CMD (code 1)
@@ -895,6 +895,8 @@ is recommended for multi-appliance RS-485 networks; see :doc:`physical-layer`.
 **Behavior**
 
 - If telemetry is disabled or in broadcast mode, command is **silently ignored**
+  (broadcast mode already sends telemetry automatically; use polling mode for
+  on-demand requests)
 - If index=0xFFFFFFFF, appliance sends one message per peripheral of that type
 - If index is valid (0 to count-1), appliance sends one message for that peripheral
 - **Does NOT reset communication timeout timer** (only PING_REQUEST does)
@@ -947,10 +949,10 @@ routers to track client health and maintain subscription timeouts.
 
 Controllers acting as routers MUST respond to PING_REQUEST with PING_RESPONSE
 using the stateless address (``0xFFFFFFFFFFFFFFFF``). Routers do NOT
-forward PING_REQUEST to appliances—ping is handled at each hop independently.
+forward PING_REQUEST to appliances - ping is handled at each hop independently.
 
 
-Telemetry Data (0x30–0x3F)
+Telemetry Data (0x30-0x3F)
 **************************
 
 Telemetry messages are sent from appliances to controllers. They are only sent
@@ -969,7 +971,7 @@ STATE_DATA
 System state and error status.
 
 | **Payload:** :ref:`STATE_DATA <payload-state-data>`
-| **Send Rate:** 2.5× telemetry interval (250ms at default 100ms interval)
+| **Send Rate:** Per telemetry interval (100ms at default)
 
 **Fields**
 
@@ -1124,6 +1126,12 @@ Fuel pump status and events.
 | **Payload:** :ref:`PUMP_DATA <payload-pump-data>`
 | **Send Rate:** On event (state changes, cycle events)
 
+.. note::
+
+   Event-driven messages are only sent when telemetry is enabled. In polling
+   mode (``interval_ms=0``), use :ref:`SEND_TELEMETRY <msg-send-telemetry>` to
+   request pump status.
+
 **Fields**
 
 .. list-table::
@@ -1185,6 +1193,12 @@ Glow plug status.
 
 | **Payload:** :ref:`GLOW_DATA <payload-glow-data>`
 | **Send Rate:** On event (on/off transitions)
+
+.. note::
+
+   Event-driven messages are only sent when telemetry is enabled. In polling
+   mode (``interval_ms=0``), use :ref:`SEND_TELEMETRY <msg-send-telemetry>` to
+   request glow status.
 
 **Fields**
 
@@ -1297,27 +1311,33 @@ Device capabilities announcement.
 
 **Router Behavior**
 
-Routers use DEVICE_ANNOUNCE to mark the end of discovery:
+Routers respond to DISCOVERY_REQUEST by sending DEVICE_ANNOUNCE for each
+accessible appliance:
 
-- After sending DEVICE_ANNOUNCE for all accessible appliances, routers send a
-  final DEVICE_ANNOUNCE with:
+- ADDRESS field contains the **appliance's address** (not the router's address)
+- Capability fields reflect that appliance's capabilities
+- Clients use this address for subsequent commands and subscriptions
 
-  - ADDRESS: Stateless address (``0xFFFFFFFFFFFFFFFF``)
-  - All capability fields set to 0
+After announcing all appliances, routers send a final end-of-discovery marker:
 
-- This end-of-discovery marker:
+- ADDRESS: Stateless address (``0xFFFFFFFFFFFFFFFF``)
+- All capability fields set to 0
 
-  - Marks the end of the device list
-  - Allows clients to know when discovery is complete
-  - Is the ONLY packet sent when no appliances are available
+This end-of-discovery marker:
+
+- Marks the end of the device list
+- Allows clients to know when discovery is complete
+- Is the ONLY packet sent when no appliances are available
 
 For routing details, see :ref:`session-initiation`.
 
 **Validation**
 
-All counts MUST be in range [1, 255] for appliance announcements. A count of 0
-indicates either a malformed announcement or the end-of-discovery marker (when
-ADDRESS is the stateless address).
+- Appliance announcements: All counts MUST be in range [1, 255]
+- End-of-discovery marker: All counts MUST be 0 (ADDRESS = stateless)
+
+A count of 0 with any address other than stateless (``0xFFFFFFFFFFFFFFFF``) is
+malformed and MUST be ignored.
 
 **Rationale**
 
@@ -1360,11 +1380,11 @@ responses.
 **Routing Behavior**
 
 Routers MUST NOT forward PING_RESPONSE messages from appliances. Ping is
-handled at each hop independently—clients receive PING_RESPONSE only from
+handled at each hop independently - clients receive PING_RESPONSE only from
 the router they are directly connected to.
 
 
-Error Messages (0xE0–0xEF)
+Error Messages (0xE0-0xEF)
 **************************
 
 Error messages indicate command validation failures. Appliances send error
@@ -1373,12 +1393,12 @@ messages to controllers when commands cannot be processed.
 **When Errors Are Sent**
 
 Errors are only sent when a command is explicitly rejected. Successful commands
-do NOT receive any response—success is inferred from subsequent telemetry or
+do NOT receive any response - success is inferred from subsequent telemetry or
 the absence of an error.
 
 **Routing Behavior**
 
-Routers forward error messages (``0xE0``–``0xE1``) to all subscribed clients,
+Routers forward error messages (``0xE0``-``0xE1``) to all subscribed clients,
 just like data messages. This allows clients to detect command failures even
 when communicating through routers.
 
@@ -1403,7 +1423,13 @@ Command validation failed.
      - Description
    * - error_code
      - int
-     - Error reason (see values below)
+     - Error category (see values below)
+   * - rejected_field (optional)
+     - uint
+     - CBOR key of the field that failed validation
+   * - constraint (optional)
+     - uint
+     - Constraint violation type (see values below)
 
 **Error Codes**
 
@@ -1418,10 +1444,63 @@ Command validation failed.
    * - 2
      - Invalid device index (motor, pump, or sensor does not exist)
 
-.. note::
+**Constraint Values**
 
-   A mechanism to identify which specific field caused the validation error is
-   planned for future expansion.
+When present, the ``constraint`` field provides detail about why validation failed:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 25 65
+
+   * - Value
+     - Name
+     - Description
+   * - 0
+     - UNSPECIFIED
+     - No specific constraint (backward compatible default)
+   * - 1
+     - VALUE_TOO_LOW
+     - Value below minimum allowed
+   * - 2
+     - VALUE_TOO_HIGH
+     - Value above maximum allowed
+   * - 3
+     - VALUE_INVALID
+     - Value is NaN, Infinity, or otherwise invalid
+   * - 4
+     - VALUE_CONFLICT
+     - Value conflicts with another field (e.g., max < min)
+   * - 5
+     - INDEX_NOT_FOUND
+     - Device index does not exist (use with error_code 2)
+   * - 6
+     - FIELD_REQUIRED
+     - Required field is missing
+   * - 7
+     - TYPE_MISMATCH
+     - Field has wrong CBOR type
+   * - 8
+     - OPERATION_BLOCKED
+     - Operation not allowed (e.g., light already-lit glow plug)
+   * - 9
+     - VALUE_IN_GAP
+     - Value in invalid gap (e.g., rpm between 1 and min_rpm-1)
+
+**Wire Format Examples**
+
+Basic error (backward compatible):
+
+.. code-block:: text
+
+   CBOR: [0xE0, {0: 1}]
+   Meaning: Invalid parameter (unspecified field)
+
+Extended error with field and constraint:
+
+.. code-block:: text
+
+   CBOR: [0xE0, {0: 1, 1: 1, 2: 2}]
+   Meaning: Invalid parameter, field key 1 (e.g., rpm), value too high
 
 
 .. _msg-error-state-reject:
@@ -1445,9 +1524,52 @@ Command rejected by appliance state machine.
    * - error_code
      - int
      - Current state that rejected the command
+   * - rejection_reason (optional)
+     - uint
+     - Why the state rejected the command (see values below)
 
 The error_code contains the state value (see :ref:`STATE_DATA <msg-state-data>`)
 that caused the rejection.
+
+**Rejection Reason Values**
+
+When present, the ``rejection_reason`` field explains why the state rejected the command:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 25 65
+
+   * - Value
+     - Name
+     - Description
+   * - 0
+     - UNSPECIFIED
+     - No specific reason (backward compatible default)
+   * - 1
+     - RESOURCE_CONTROLLED
+     - Resource controlled by state machine (e.g., glow plug in HEAT mode)
+   * - 2
+     - INVALID_IN_STATE
+     - Operation not valid in current state (e.g., SET_TARGET_TEMP outside HEATING)
+   * - 3
+     - TRANSITION_BLOCKED
+     - State transition not allowed from current state (reserved)
+
+**Wire Format Examples**
+
+Basic rejection (backward compatible):
+
+.. code-block:: text
+
+   CBOR: [0xE1, {0: 5}]
+   Meaning: Rejected by state 5 (HEATING)
+
+Extended rejection with reason:
+
+.. code-block:: text
+
+   CBOR: [0xE1, {0: 5, 1: 1}]
+   Meaning: Rejected by HEATING state, resource controlled by state machine
 
 **Recovery**
 
@@ -1455,8 +1577,3 @@ Controllers should handle ERROR_STATE_REJECT by either:
 
 - Waiting for the appliance to reach an appropriate state
 - Retrying the command after addressing the state conflict
-
-.. note::
-
-   A mechanism to communicate the specific reason why the state rejected the
-   command is planned for future expansion.

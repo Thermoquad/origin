@@ -1,5 +1,5 @@
 ;
-; Copyright (c) 2025 Kaz Walker, Thermoquad
+; Copyright (c) 2026 Kaz Walker, Thermoquad
 ; SPDX-License-Identifier: Apache-2.0
 ;
 ; Fusain Protocol - CBOR Schema (CDDL)
@@ -24,12 +24,12 @@
 ; Timestamp in milliseconds since boot (wraps at 2^32)
 timestamp = uint .size 4
 
-; Device/peripheral indices (0-9 typically)
-device-index = uint .size 1
-motor-index = uint .size 1       ; motor peripheral index
-pump-index = uint .size 1        ; pump peripheral index
-thermometer-index = uint .size 1 ; thermometer peripheral index
-glow-index = uint .size 1        ; glow plug peripheral index
+; Device/peripheral indices (0-9 typically, negative values reserved for future use)
+device-index = int .size 1
+motor-index = int .size 1        ; motor peripheral index
+pump-index = int .size 1         ; pump peripheral index
+thermometer-index = int .size 1  ; thermometer peripheral index
+glow-index = int .size 1         ; glow plug peripheral index
 
 ; 64-bit device address
 address = uint .size 8
@@ -246,10 +246,24 @@ ping-response-payload = {
 ; Error Message Payloads (0xE0-0xEF)
 ; ===========================================================================
 
+; Constraint violation types for ERROR_INVALID_CMD
+; Values: 0=unspecified, 1=value-too-low, 2=value-too-high, 3=value-invalid,
+;         4=value-conflict, 5=index-not-found, 6=field-required,
+;         7=type-mismatch, 8=operation-blocked, 9=value-in-gap
+constraint = uint .le 255
+
+; Rejection reasons for ERROR_STATE_REJECT
+; Values: 0=unspecified, 1=resource-controlled, 2=invalid-in-state,
+;         3=transition-blocked (reserved)
+rejection-reason = uint .le 255
+
 error-invalid-cmd-payload = {
-    0 => int,                           ; error-code: 1 = invalid param, 2 = invalid device index
+    0 => int,                           ; error-code: 1 = invalid param, 2 = invalid index
+    ? 1 => uint,                        ; rejected-field: CBOR key that failed validation (optional)
+    ? 2 => constraint,                  ; constraint: Constraint violation type (optional)
 }
 
 error-state-reject-payload = {
-    0 => state,                         ; error-code: State that rejected the command
+    0 => int,                           ; error-code: State that rejected the command
+    ? 1 => rejection-reason,            ; rejection-reason: Why the state rejected (optional)
 }

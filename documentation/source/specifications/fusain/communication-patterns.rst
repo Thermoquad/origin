@@ -36,24 +36,7 @@ Appliances broadcast telemetry at configured intervals when enabled.
 
    [After enabling, appliance broadcasts at configured interval:]
 
-     Every 100ms:   MOTOR_DATA (per motor) + TEMPERATURE_DATA (per sensor)
-     Every 250ms:   STATE_DATA (2.5× interval)
-
-**Broadcast Mode Timing:**
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 35 35
-
-   * - Interval
-     - Motor/Temperature Rate
-     - State Rate
-   * - 100ms
-     - Every 100ms
-     - Every 250ms
-   * - 500ms
-     - Every 500ms
-     - Every 1250ms
+     Every 100ms:   STATE_DATA + MOTOR_DATA (per motor) + TEMPERATURE_DATA (per sensor)
 
 For appliances with multiple motors or sensors, separate messages are sent for
 each peripheral.
@@ -79,7 +62,7 @@ Some messages are sent when events occur, not on a timer.
 
 - Event-driven messages are only sent when telemetry is enabled
 - In polling mode (``interval_ms=0``), event-driven messages are NOT sent
-  automatically—use :ref:`msg-send-telemetry` to request them
+  automatically - use :ref:`msg-send-telemetry` to request them
 
 
 Heartbeat
@@ -98,7 +81,7 @@ Controllers check connectivity with periodic pings.
 - Reset communication timeout timer on appliance
 - Maintain subscription timeouts on routers
 
-**Recommended Interval:** 10–15 seconds (well below default 30-second timeout)
+**Recommended Interval:** 10-15 seconds (well below default 30-second timeout)
 
 
 Timeout Mode

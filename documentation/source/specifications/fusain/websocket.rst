@@ -107,7 +107,7 @@ Clients SHOULD send :ref:`PING_REQUEST <msg-ping-request>` packets periodically 
 - Maintain the connection through proxies and firewalls
 - Detect connection failures
 
-RECOMMENDED interval: 10–15 seconds.
+RECOMMENDED interval: 10-15 seconds.
 
 .. note::
 

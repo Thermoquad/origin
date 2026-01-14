@@ -100,17 +100,49 @@ This provides a safety mechanism for unattended operation.
    * - Default timeout
      - 30 seconds
    * - Configurable range
-     - 5–60 seconds
-   * - Action on timeout
-     - Transition to IDLE, disable telemetry
+     - 5-60 seconds
 
 **Important:** Only :ref:`PING_REQUEST <msg-ping-request>` resets the communication
 timeout timer. Other commands (:ref:`STATE_COMMAND <msg-state-command>`,
 :ref:`MOTOR_COMMAND <msg-motor-command>`, :ref:`SEND_TELEMETRY <msg-send-telemetry>`,
 etc.) do NOT reset the timer.
 
-Controllers SHOULD send :ref:`PING_REQUEST <msg-ping-request>` every 10–15 seconds
+Controllers SHOULD send :ref:`PING_REQUEST <msg-ping-request>` every 10-15 seconds
 to maintain communication. For physical layer timing, see :doc:`physical-layer`.
+
+**Timeout Behavior**
+
+When the communication timeout elapses, the appliance performs two independent actions:
+
+1. **Disable telemetry broadcasts**  -  Stops all periodic telemetry transmission.
+   This quiets the bus while waiting for the controller to reconnect.
+
+2. **Initiate safe shutdown**  -  If the appliance is operating (not already IDLE),
+   transition to IDLE mode. If temperature is elevated, this triggers a COOLING
+   cycle before reaching IDLE to ensure safe shutdown.
+
+These are separate actions:
+
+- Telemetry is always disabled, even if the appliance is already in IDLE state
+- The state transition only occurs if the appliance is not already in IDLE
+- Telemetry remains disabled until explicitly re-enabled via
+  :ref:`TELEMETRY_CONFIG <msg-telemetry-config>`
+
+**Rationale:** Disabling telemetry reduces bus traffic, allowing the controller to
+cleanly re-establish communication when it reconnects. The safe shutdown ensures
+the appliance does not continue operating without supervision.
+
+**Autonomous Operation**
+
+The communication timeout can be disabled via :ref:`TIMEOUT_CONFIG <msg-timeout-config>`
+(``enabled`` = false). When disabled, the appliance continues operating indefinitely
+without controller supervision.
+
+This is useful for scenarios where:
+
+- The controller configures the appliance and disconnects
+- Telemetry is in polling mode (``interval_ms`` = 0 in :ref:`TELEMETRY_CONFIG <msg-telemetry-config>`)
+- The appliance should maintain its current operating state
 
 
 Byte Synchronization
@@ -247,7 +279,7 @@ Encoding Steps
 
    - LENGTH (1 byte): CBOR payload length
    - ADDRESS (8 bytes): destination or source address
-   - PAYLOAD (0–114 bytes): CBOR-encoded message
+   - PAYLOAD (0-114 bytes): CBOR-encoded message
 
 3. Calculate CRC-16-CCITT over the unstuffed packet
 
@@ -280,7 +312,7 @@ Transmission Requirements
 Appliance Transmission Rules
 ----------------------------
 
-Appliances MUST NOT transmit data messages (``0x30``–``0x35``) or
+Appliances MUST NOT transmit data messages (``0x30``-``0x35``) or
 :ref:`PING_RESPONSE <msg-ping-response>` (``0x3F``) unless:
 
 - Responding to :ref:`DISCOVERY_REQUEST <msg-discovery-request>` with
@@ -613,6 +645,8 @@ Use ``net_buf`` for packet buffer management:
 
    #include <zephyr/net/buf.h>
 
+   #define FUSAIN_MAX_PACKET_SIZE 256  // See packet-format.rst Wire Format Size
+
    NET_BUF_POOL_DEFINE(fusain_pool, 8, FUSAIN_MAX_PACKET_SIZE, 0, NULL);
 
    struct net_buf *buf = net_buf_alloc(&fusain_pool, K_NO_WAIT);
@@ -711,6 +745,35 @@ Performance Characteristics
 This section provides guidance on expected protocol performance.
 
 
+.. _link-bandwidth-requirements:
+
+Link Bandwidth Requirements
+---------------------------
+
+When selecting a physical layer for controller-to-appliance communication, the
+baud rate MUST be sufficient to receive state and all peripheral telemetry at
+least every 500ms, plus a reasonable margin determined by hardware selection.
+
+**500ms Minimum Interval**
+
+Controllers with user interfaces typically require telemetry updates at least
+every 500ms for responsive display. This applies to any physical layer (LIN,
+RS-485, plain UART), not just specific transports.
+
+**Calculating Required Bandwidth**
+
+1. Determine total telemetry size per interval (STATE_DATA + MOTOR_DATA per
+   motor + TEMPERATURE_DATA per sensor + event-driven messages)
+2. Add margin for command traffic and retries (~20%)
+3. Select baud rate that delivers this within 500ms
+
+**Slower Links**
+
+Slower links (e.g., low baud rates, constrained wireless) MAY be used on the
+last hop to a client, but require polling mode to request only the specific
+state and telemetry needed for display. See :ref:`msg-send-telemetry`.
+
+
 Throughput
 ----------
 
@@ -733,7 +796,7 @@ interval.
      - ~200 bytes
      - ~2000 bytes/sec
 
-**At 500ms Telemetry Interval (LIN networks):**
+**At 500ms Telemetry Interval:**
 
 .. list-table::
    :header-rows: 1
@@ -752,7 +815,7 @@ interval.
 **Bandwidth Utilization:**
 
 At 115200 baud (effective ~11,520 bytes/sec) or 230400 baud (~23,040 bytes/sec),
-telemetry overhead is typically 1–17% of available bandwidth depending on
+telemetry overhead is typically 1-17% of available bandwidth depending on
 interval and peripheral count.
 
 
@@ -768,11 +831,11 @@ Latency
    * - Command processing
      - < 5ms (typical)
    * - Telemetry delay (100ms interval)
-     - 0–100ms
+     - 0-100ms
    * - Telemetry delay (500ms interval)
-     - 0–500ms
+     - 0-500ms
    * - Multi-hop routing (per hop)
-     - 50–200ms
+     - 50-200ms
 
 
 Reliability

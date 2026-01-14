@@ -106,7 +106,7 @@ Clients SHOULD send :ref:`PING_REQUEST <msg-ping-request>` packets periodically 
 - Detect connection failures (TCP keepalive may be insufficient)
 - Verify connectivity to the gateway
 
-RECOMMENDED interval: 10–15 seconds.
+RECOMMENDED interval: 10-15 seconds.
 
 .. note::
 

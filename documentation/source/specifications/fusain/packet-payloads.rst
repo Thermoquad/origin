@@ -46,7 +46,7 @@ Configuration Commands
    * - :ref:`0x17 <payload-timeout-config>`
      - :ref:`TIMEOUT_CONFIG <payload-timeout-config>`
      - Configure communication timeout
-   * - 0x18–0x1E
+   * - 0x18-0x1E
      - *Reserved*
      - Reserved for future configuration commands
    * - :ref:`0x1F <payload-discovery-request>`
@@ -81,7 +81,7 @@ Control Commands
    * - :ref:`0x25 <payload-send-telemetry>`
      - :ref:`SEND_TELEMETRY <payload-send-telemetry>`
      - Request telemetry data (polling mode)
-   * - 0x26–0x2E
+   * - 0x26-0x2E
      - *Reserved*
      - Reserved for future control commands
    * - :ref:`0x2F <payload-ping-request>`
@@ -116,7 +116,7 @@ Telemetry Data
    * - :ref:`0x35 <payload-device-announce>`
      - :ref:`DEVICE_ANNOUNCE <payload-device-announce>`
      - Device capabilities announcement
-   * - 0x36–0x3E
+   * - 0x36-0x3E
      - *Reserved*
      - Reserved for future telemetry messages
    * - :ref:`0x3F <payload-ping-response>`
@@ -139,7 +139,7 @@ Error Messages
    * - :ref:`0xE1 <payload-error-state-reject>`
      - :ref:`ERROR_STATE_REJECT <payload-error-state-reject>`
      - Command rejected by state machine
-   * - 0xE2–0xEF
+   * - 0xE2-0xEF
      - *Reserved*
      - Reserved for future error messages
 
@@ -173,8 +173,8 @@ Configure motor controller parameters.
      - Description
    * - 0
      - motor
-     - uint
-     - Motor index
+     - int
+     - Motor index (negative values reserved)
    * - 1 (?)
      - pwm_period
      - uint
@@ -227,8 +227,8 @@ Configure fuel pump parameters.
      - Description
    * - 0
      - pump
-     - uint
-     - Pump index
+     - int
+     - Pump index (negative values reserved)
    * - 1 (?)
      - pulse_ms
      - uint
@@ -261,8 +261,8 @@ Configure temperature controller parameters.
      - Description
    * - 0
      - thermometer
-     - uint
-     - Temperature sensor index
+     - int
+     - Temperature sensor index (negative values reserved)
    * - 1 (?)
      - pid_kp
      - float
@@ -299,8 +299,8 @@ Configure glow plug parameters.
      - Description
    * - 0
      - glow
-     - uint
-     - Glow plug index
+     - int
+     - Glow plug index (negative values reserved)
    * - 1 (?)
      - max_duration
      - uint
@@ -416,7 +416,7 @@ Configure communication timeout behavior.
    * - 1
      - timeout_ms
      - uint
-     - Timeout interval in milliseconds (5000–60000)
+     - Timeout interval in milliseconds (5000-60000)
 
 
 .. _payload-discovery-request:
@@ -514,8 +514,8 @@ Set motor speed.
      - Description
    * - 0
      - motor
-     - uint
-     - Motor index
+     - int
+     - Motor index (negative values reserved)
    * - 1
      - rpm
      - int
@@ -544,8 +544,8 @@ Set fuel pump rate.
      - Description
    * - 0
      - pump
-     - uint
-     - Pump index
+     - int
+     - Pump index (negative values reserved)
    * - 1
      - rate_ms
      - int
@@ -574,8 +574,8 @@ Control glow plug.
      - Description
    * - 0
      - glow
-     - uint
-     - Glow plug index
+     - int
+     - Glow plug index (negative values reserved)
    * - 1
      - duration
      - int
@@ -604,8 +604,8 @@ Configure temperature controller operation.
      - Description
    * - 0
      - thermometer
-     - uint
-     - Temperature sensor index
+     - int
+     - Temperature sensor index (negative values reserved)
    * - 1
      - type
      - uint
@@ -848,8 +848,8 @@ Motor telemetry.
      - Description
    * - 0
      - motor
-     - uint
-     - Motor index
+     - int
+     - Motor index (negative values reserved)
    * - 1
      - timestamp
      - uint
@@ -902,8 +902,8 @@ Fuel pump status and events.
      - Description
    * - 0
      - pump
-     - uint
-     - Pump index
+     - int
+     - Pump index (negative values reserved)
    * - 1
      - timestamp
      - uint
@@ -968,8 +968,8 @@ Glow plug status.
      - Description
    * - 0
      - glow
-     - uint
-     - Glow plug index
+     - int
+     - Glow plug index (negative values reserved)
    * - 1
      - timestamp
      - uint
@@ -1002,8 +1002,8 @@ Temperature readings and PID status.
      - Description
    * - 0
      - thermometer
-     - uint
-     - Sensor index
+     - int
+     - Sensor index (negative values reserved)
    * - 1
      - timestamp
      - uint
@@ -1132,7 +1132,15 @@ Command validation failed.
    * - 0
      - error_code
      - int
-     - Error reason (see values below)
+     - Error category (1 = invalid parameter, 2 = invalid index)
+   * - 1 (optional)
+     - rejected_field
+     - uint
+     - CBOR key of the field that failed validation
+   * - 2 (optional)
+     - constraint
+     - uint
+     - Constraint violation type (see values below)
 
 **Error Code Values**
 
@@ -1146,6 +1154,46 @@ Command validation failed.
      - Invalid parameter value (out of range, NaN, etc.)
    * - 2
      - Invalid device index (motor, pump, or sensor does not exist)
+
+**Constraint Values**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 25 65
+
+   * - Value
+     - Name
+     - Description
+   * - 0
+     - UNSPECIFIED
+     - No specific constraint (backward compatible)
+   * - 1
+     - VALUE_TOO_LOW
+     - Value below minimum allowed
+   * - 2
+     - VALUE_TOO_HIGH
+     - Value above maximum allowed
+   * - 3
+     - VALUE_INVALID
+     - Value is NaN, Infinity, or otherwise invalid
+   * - 4
+     - VALUE_CONFLICT
+     - Value conflicts with another field
+   * - 5
+     - INDEX_NOT_FOUND
+     - Device index does not exist
+   * - 6
+     - FIELD_REQUIRED
+     - Required field is missing
+   * - 7
+     - TYPE_MISMATCH
+     - Field has wrong CBOR type
+   * - 8
+     - OPERATION_BLOCKED
+     - Operation not allowed in current context
+   * - 9
+     - VALUE_IN_GAP
+     - Value in invalid gap (e.g., rpm between 1 and min_rpm-1)
 
 
 .. _payload-error-state-reject:
@@ -1170,5 +1218,31 @@ Command rejected by state machine.
      - Description
    * - 0
      - error_code
-     - uint
+     - int
      - State that rejected the command
+   * - 1 (optional)
+     - rejection_reason
+     - uint
+     - Why the state rejected the command (see values below)
+
+**Rejection Reason Values**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 25 65
+
+   * - Value
+     - Name
+     - Description
+   * - 0
+     - UNSPECIFIED
+     - No specific reason (backward compatible)
+   * - 1
+     - RESOURCE_CONTROLLED
+     - Resource controlled by state machine
+   * - 2
+     - INVALID_IN_STATE
+     - Operation not valid in current state
+   * - 3
+     - TRANSITION_BLOCKED
+     - State transition not allowed (reserved)

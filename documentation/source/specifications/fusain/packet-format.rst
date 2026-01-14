@@ -22,12 +22,12 @@ All packets follow this structure:
      - Start delimiter (``0x7E``)
    * - LENGTH
      - 1 byte
-     - Payload length in bytes (0–114)
+     - Payload length in bytes (0-114)
    * - ADDRESS
      - 8 bytes
      - 64-bit device address (little-endian)
    * - PAYLOAD
-     - 0–114 bytes
+     - 0-114 bytes
      - CBOR-encoded message (includes type and data)
    * - CRC
      - 2 bytes
@@ -36,8 +36,26 @@ All packets follow this structure:
      - 1 byte
      - End delimiter (``0x7F``)
 
-**Packet Size:** 13 bytes overhead + payload = 13–127 bytes total. For buffer
-sizing, see :ref:`impl-buffers`.
+**Packet Size:** 13 bytes overhead + payload = 13-127 bytes total (unstuffed).
+
+**Wire Format Size:** Byte stuffing expands packets on the wire:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 50 50
+
+   * - Calculation
+     - Size
+   * - Unstuffed content (LENGTH + ADDRESS + PAYLOAD + CRC)
+     - 1 + 8 + 114 + 2 = 125 bytes max
+   * - Worst-case stuffing (every byte escaped)
+     - 125 × 2 = 250 bytes
+   * - Add START and END delimiters
+     - 250 + 2 = 252 bytes
+   * - **Maximum wire size**
+     - **252 bytes (2,016 bits)**
+
+For buffer sizing, see :ref:`impl-buffers`.
 
 **Payload Structure:** The CBOR payload is encoded as a two-element array
 ``[type, data]`` where ``type`` is the message type identifier (see
@@ -81,7 +99,7 @@ When an appliance receives a broadcast command:
 - The command MUST be processed normally
 - The appliance MUST NOT respond (to prevent bus collisions)
 - Exception: :ref:`DISCOVERY_REQUEST <msg-discovery-request>` triggers a response
-  after a random delay (0–50ms)
+  after a random delay (0-50ms)
 
 
 .. _packet-crc:
@@ -190,7 +208,7 @@ Based on `Koopman's CRC research <https://users.ece.cmu.edu/~koopman/crc/>`_:
      - 135 bits (~17 bytes)
      - All 1-5 bit errors
 
-For Fusain packets (max ~260 bytes = 2,080 bits), CRC-16-CCITT provides:
+For Fusain packets (max 252 bytes = 2,016 bits on wire), CRC-16-CCITT provides:
 
 - **HD=4**: Detects all 1, 2, and 3-bit errors
 - Burst error detection: Any burst ≤16 bits
@@ -228,7 +246,8 @@ Byte Stuffing
 *************
 
 To prevent delimiter bytes from appearing in the packet data, byte stuffing is
-applied to all bytes between START and END.
+applied to the packet content (LENGTH, ADDRESS, PAYLOAD, and CRC) before the
+START and END delimiters are added. The delimiters themselves MUST NOT be escaped.
 
 **Escape Sequences**
 

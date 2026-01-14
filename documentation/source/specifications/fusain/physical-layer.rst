@@ -9,7 +9,7 @@ Overview
 ********
 
 Fusain uses UART-based packet framing and supports multiple physical layer
-transports. The protocol remains unchanged across all physical layers—transceiver
+transports. The protocol remains unchanged across all physical layers - transceiver
 ICs handle the adaptation between Fusain packets and the physical bus. For
 routing between physical layers, see :doc:`packet-routing`.
 
@@ -161,7 +161,7 @@ multi-drop networks. Use RS-485 when:
    * - Typical distance
      - 100m (guaranteed with CAT5)
    * - Maximum nodes
-     - 32–256 (depends on transceiver unit load)
+     - 32-256 (depends on transceiver unit load)
    * - Noise immunity
      - High (differential signaling)
    * - Wiring
@@ -188,7 +188,7 @@ RS-485 transceivers require driver enable (DE) and receiver enable (RE) control.
    * - Inter-packet gap
      - 500μs minimum (prevents collisions)
    * - Turn-around time
-     - 1–10μs (transceiver dependent)
+     - 1-10μs (transceiver dependent)
 
 
 Multi-Drop Topology
@@ -296,7 +296,7 @@ Fusain requires software collision avoidance on RS-485. See
 1. **Discovery Phase**
 
    :ref:`msg-discovery-request` causes all appliances to respond. Each appliance
-   MUST wait a random delay (0–50ms) before sending :ref:`msg-device-announce`.
+   MUST wait a random delay (0-50ms) before sending :ref:`msg-device-announce`.
 
 2. **Normal Operation**
 
@@ -415,11 +415,9 @@ IC handles all LIN physical layer requirements:
 
 **Transceiver Responsibilities**
 
-- **Fragmentation:** Splits Fusain packets (up to 128 bytes) into LIN frames
-  (8 bytes max)
-- **Reassembly:** Reconstructs Fusain packets from received LIN frames
-- **LIN Protocol:** Handles break field, sync byte, frame IDs, checksums
-- **Buffering:** Queues Fusain packets for transmission
+- **Voltage Translation:** Converts UART logic levels to LIN bus levels
+- **Slew Rate Control:** Limits signal transitions for EMC compliance
+- **Wake/Sleep:** Handles LIN bus wake-up and sleep modes
 
 
 Recommended Transceiver ICs
@@ -464,15 +462,9 @@ Performance Characteristics
    * - Baud rate
      - 19.2 kbaud
      - LIN standard
-   * - Packet latency
-     - 80–150ms
-     - Due to fragmentation
    * - Telemetry interval
      - 500ms minimum
-     - Allows for fragmentation overhead
-   * - Bandwidth utilization
-     - ~15–20%
-     - At 500ms telemetry interval
+     - See :ref:`link-bandwidth-requirements`
 
 
 Configuration
@@ -480,15 +472,10 @@ Configuration
 
 1. **Baud Rate:** 19.2 kbaud at MCU UART
 
-2. **Telemetry Intervals:** 500ms minimum recommended
+2. **Telemetry Intervals:** 500ms minimum. See :ref:`link-bandwidth-requirements`.
 
-   - Maximum packet (~128 bytes) requires ~16 LIN frames
-   - Transmission time: ~80ms
-   - 500ms interval provides margin for fragmentation
-
-3. **Discovery:** :ref:`DISCOVERY_REQUEST <msg-discovery-request>` uses LIN
-   broadcast frame ID. Random delay (0–50ms) MUST still be applied for protocol
-   consistency.
+3. **Discovery:** Random delay (0-50ms) MUST be applied before responding to
+   :ref:`DISCOVERY_REQUEST <msg-discovery-request>` for protocol consistency.
 
 
 Wiring
@@ -534,7 +521,7 @@ Comparison Summary
      -
    * - Multi-drop
      - No
-     - Yes (32–256)
+     - Yes (32-256)
      - No
      - Fusain restriction
    * - Wiring
@@ -576,7 +563,7 @@ Production Deployments
 
    - Implement DE/RE control in firmware
    - Use daisy-chain topology with 120Ω termination at both ends
-   - Add random delays (0–50ms) to DISCOVERY_REQUEST responses
+   - Add random delays (0-50ms) to DISCOVERY_REQUEST responses
    - Use polling mode for multi-appliance networks
 
 Development and Prototyping
@@ -605,7 +592,7 @@ Protocol Configuration Summary
    * - Production (multi-appliance)
      - RS-485
      - 115200
-     - 100–500ms
+     - 100-500ms
    * - Development
      - Plain UART
      - 230400

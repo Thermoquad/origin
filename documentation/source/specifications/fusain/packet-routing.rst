@@ -32,7 +32,7 @@ transports, see :doc:`tcp` and :doc:`websocket`.
 Routing Architecture
 ********************
 
-Routers are transparent forwarders—they do not modify packet contents. The
+Routers are transparent forwarders - they do not modify packet contents. The
 ADDRESS field always contains the original source or destination address,
 regardless of how many hops the packet traverses.
 
@@ -85,7 +85,7 @@ A router announces ALL appliances it can reach, including:
 - Appliances on its own hardware bus (LIN, RS-485)
 - Appliances learned from other routers (cascading discovery)
 
-This enables multi-hop routing—a client connected to Router A can discover
+This enables multi-hop routing - a client connected to Router A can discover
 appliances that are only reachable through Router B.
 
 .. code-block:: text
@@ -210,7 +210,7 @@ with :ref:`PING_RESPONSE <msg-ping-response>` using the stateless address
 
 Routers MUST send :ref:`PING_REQUEST <msg-ping-request>` to each appliance on
 their hardware bus to maintain appliance communication timeouts. RECOMMENDED
-interval: 10–15 seconds.
+interval: 10-15 seconds.
 
 .. code-block:: text
 
@@ -272,7 +272,7 @@ Forwarding Process
 Router Behavior
 ---------------
 
-When a router receives a command (``0x10``–``0x2F``) with ADDRESS ≠ own address:
+When a router receives a command (``0x10``-``0x2F``) with ADDRESS ≠ own address:
 
 1. Determine which connection the destination device is reachable through
 2. Forward packet unchanged to that connection
@@ -326,15 +326,15 @@ When a router receives :ref:`DATA_SUBSCRIPTION <msg-data-subscription>`:
 
 1. Associates the subscription with the connection on which it was received
 2. Adds the connection to the routing table for the specified appliance_address
-3. When data messages (``0x30``–``0x34``) or error messages (``0xE0``–``0xE1``)
+3. When data messages (``0x30``-``0x34``) or error messages (``0xE0``-``0xE1``)
    are received from appliance_address, forwards those messages to the
    subscribed connection
 
 :ref:`DEVICE_ANNOUNCE <msg-device-announce>` (``0x35``) is NOT forwarded via
-subscriptions—it is only sent during discovery.
+subscriptions - it is only sent during discovery.
 
 Routers MUST NOT forward packets with reserved message types
-(``0x18``–``0x1E``, ``0x26``–``0x2E``, ``0x36``–``0x3E``, ``0xE2``–``0xEF``).
+(``0x18``-``0x1E``, ``0x26``-``0x2E``, ``0x36``-``0x3E``, ``0xE2``-``0xEF``).
 
 
 DATA_UNSUBSCRIBE (0x15)
@@ -443,7 +443,7 @@ subscription is refreshed (timeout reset).
 Subscription Lifecycle
 **********************
 
-Subscriptions are NOT persistent—they are lost on power cycle, reset, or
+Subscriptions are NOT persistent - they are lost on power cycle, reset, or
 connection close.
 
 
@@ -546,11 +546,11 @@ Router MUST inspect ADDRESS and MSG_TYPE fields of all received packets:
 Command Forwarding
 ------------------
 
-When router receives command (``0x10``–``0x2F``) with ADDRESS ≠ own address:
+When router receives command (``0x10``-``0x2F``) with ADDRESS ≠ own address:
 
 - **Exception:** :ref:`DATA_SUBSCRIPTION <msg-data-subscription>` (``0x14``) and
   :ref:`DATA_UNSUBSCRIBE <msg-data-unsubscribe>` (``0x15``) are NEVER
-  forwarded—they are processed locally regardless of ADDRESS field
+  forwarded - they are processed locally regardless of ADDRESS field
 - For other commands, forward packet to the next-hop connection where the
   destination device is reachable (hardware bus or upstream router)
 - Router SHOULD maintain device reachability table (see Command Forwarding
@@ -561,8 +561,8 @@ When router receives command (``0x10``–``0x2F``) with ADDRESS ≠ own address:
 Data Forwarding
 ---------------
 
-When router receives data message (``0x30``–``0x34``) or error message
-(``0xE0``–``0xE1``):
+When router receives data message (``0x30``-``0x34``) or error message
+(``0xE0``-``0xE1``):
 
 - Check subscription table for matching appliance_address
 - Forward copy to each subscribed connection
@@ -781,7 +781,7 @@ extensions for filtering.
 Latency
 -------
 
-Multi-hop adds latency, typically 50–200ms per hop. Plan accordingly for
+Multi-hop adds latency, typically 50-200ms per hop. Plan accordingly for
 time-sensitive applications.
 
 
