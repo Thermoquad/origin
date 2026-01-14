@@ -51,6 +51,13 @@ html_theme_options = {
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
 copybutton_prompt_is_regexp = True
 
+# -- Linkcheck configuration -------------------------------------------------
+
+# Ignore URLs that block automated requests (403 Forbidden)
+linkcheck_ignore = [
+    r'https://www\.npmjs\.com/.*',
+]
+
 
 def setup(app):
     # Theme customizations (Zephyr-style)
