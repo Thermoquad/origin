@@ -2,6 +2,7 @@ version: "3"
 
 vars:
   SPHINXBUILD: sphinx-build
+  SPHINX_AUTOBUILD: sphinx-autobuild
   SOURCEDIR: source
   BUILDDIR: build
   CDDL_FILE: source/specifications/fusain/fusain.cddl
@@ -18,7 +19,8 @@ tasks:
   ci:
     desc: Build HTML documentation and validate CDDL schema
     cmds:
-      - task: html
+      - "{{.SPHINXBUILD}} -b html -W --keep-going {{.SOURCEDIR}} {{.BUILDDIR}}"
+      - task: linkcheck
       - task: validate-cddl
 
   install:
@@ -37,26 +39,12 @@ tasks:
       - "{{.SPHINXBUILD}} -M clean {{.SOURCEDIR}} {{.BUILDDIR}}"
 
   serve:
-    desc: Build and serve documentation locally
+    desc: Build and serve documentation with auto-reload
     cmds:
-      - task: html
-      - echo "Serving at http://localhost:8000"
-      - python3 -m http.server 8000 --directory {{.BUILDDIR}}/html
-
-  auto-build:
-    desc: Rebuild documentation automatically when files are saved
-    watch: true
-    sources:
-      - "{{.SOURCEDIR}}/**/*.rst"
-      - "{{.SOURCEDIR}}/**/*.md"
-      - "{{.SOURCEDIR}}/**/*.py"
-      - "{{.SOURCEDIR}}/_static/**"
-      - "{{.SOURCEDIR}}/_templates/**"
-      - "{{.CDDL_FILE}}"
-    cmd: task ci
+      - "{{.SPHINX_AUTOBUILD}} {{.SOURCEDIR}} {{.BUILDDIR}}"
 
   linkcheck:
-    desc: Check external links
+    desc: Check internal/external links
     cmds:
       - "{{.SPHINXBUILD}} -M linkcheck {{.SOURCEDIR}} {{.BUILDDIR}}"
 
@@ -75,8 +63,8 @@ tasks:
     cmds:
       - mkdir -p {{.BUILDDIR}}/cddl
       - zcbor code
-          --cddl {{.CDDL_FILE}}
-          --output-c {{.BUILDDIR}}/cddl/fusain.c
-          --output-h {{.BUILDDIR}}/cddl/fusain.h
-          -t {{.CDDL_TYPES}}
-          --decode --encode
+        --cddl {{.CDDL_FILE}}
+        --output-c {{.BUILDDIR}}/cddl/fusain.c
+        --output-h {{.BUILDDIR}}/cddl/fusain.h
+        -t {{.CDDL_TYPES}}
+        --decode --encode

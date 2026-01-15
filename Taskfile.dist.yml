@@ -15,7 +15,19 @@ includes:
     taskfile: tasks/setup/raspberry-pi-pico.yml
     flatten: true
 
+  docs:
+    taskfile: documentation
+    dir: documentation
+
 tasks:
+  install-git-hooks:
+    desc: Install Git hooks for pre-commit checks
+    cmds:
+      - mkdir -p .git/hooks
+      - cp git-hooks/pre-commit .git/hooks/pre-commit
+      - chmod +x .git/hooks/pre-commit
+      - echo "✅ Git hooks installed successfully"
+
   setup-workspace:
     desc: Prepare the workspace for the install step
     cmds:

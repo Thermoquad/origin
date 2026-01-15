@@ -32,12 +32,10 @@ jobs:
           cache-dependency-path: documentation/requirements.txt
 
       - name: Install dependencies
-        working-directory: documentation
-        run: task install
+        run: task docs:install
 
       - name: Build documentation
-        working-directory: documentation
-        run: task ci
+        run: task docs:ci
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
