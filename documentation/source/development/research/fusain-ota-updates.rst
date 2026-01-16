@@ -4,7 +4,7 @@ Fusain OTA Updates
 :Date: 2026-01-12
 :Author: Thermoquad
 :Status: Research Complete
-:Related: :doc:`rp2350-flash-usage`, :doc:`fusain-error-communication`
+:Related: :doc:`rp2350-flash-usage`, fusain-error-communication
 
 .. contents:: Table of Contents
    :local:
@@ -536,7 +536,7 @@ Report update status. Sent by appliance in response to OTA commands or OTA_QUERY
      - Image marked for boot, awaiting reboot
 
 Errors are communicated via ERROR_INVALID_CMD or ERROR_STATE_REJECT messages
-as defined in :doc:`fusain-error-communication`. After an error, state returns
+as defined in fusain-error-communication. After an error, state returns
 to IDLE.
 
 OTA_ABORT (0x4F)
@@ -687,7 +687,7 @@ Integration with Error Communication
 ====================================
 
 OTA errors use the extended error communication scheme from
-:doc:`fusain-error-communication`:
+fusain-error-communication:
 
 **OTA-Specific Constraint Values (10-19):**
 
@@ -1087,7 +1087,7 @@ References
 **********
 
 - :doc:`rp2350-flash-usage` — Flash partitioning and storage options
-- :doc:`fusain-error-communication` — Extended error reporting scheme
+- fusain-error-communication — Extended error reporting scheme
 - `MCUboot Documentation <https://docs.mcuboot.com/>`_
 - `Zephyr MCUmgr <https://docs.zephyrproject.org/latest/services/device_mgmt/mcumgr.html>`_
 - `Zephyr DFU <https://docs.zephyrproject.org/latest/services/device_mgmt/dfu.html>`_

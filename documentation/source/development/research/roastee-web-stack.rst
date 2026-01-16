@@ -1454,17 +1454,12 @@ References
 .. [6] SvelteKit Service Workers Documentation
    https://kit.svelte.dev/docs/service-workers
 
-.. [7] typesafe-i18n Documentation
-   https://typesafe-i18n.pages.dev/
+**Additional Resources:**
 
-.. [8] Nanostores GitHub
-   https://github.com/nanostores/nanostores
-
-.. [9] Vite PWA Plugin Documentation
-   https://vite-pwa-org.netlify.app/
-
-.. [10] Frontend Framework Performance Benchmark 2025-2026
-   https://www.frontendtools.tech/blog/best-frontend-frameworks-2025-comparison
+- typesafe-i18n Documentation: https://typesafe-i18n.pages.dev/
+- Nanostores GitHub: https://github.com/nanostores/nanostores
+- Vite PWA Plugin Documentation: https://vite-pwa-org.netlify.app/
+- Frontend Framework Performance Benchmark 2025-2026: https://www.frontendtools.tech/blog/best-frontend-frameworks-2025-comparison
 
 Appendix A: Minimum Viable Stack
 ********************************
