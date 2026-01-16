@@ -19,7 +19,7 @@ tasks:
   ci:
     desc: Build HTML documentation and validate CDDL schema
     cmds:
-      - "{{.SPHINXBUILD}} -b html -W --keep-going {{.SOURCEDIR}} {{.BUILDDIR}}"
+      - "{{.SPHINXBUILD}} -b html -W --keep-going {{.SOURCEDIR}} {{.BUILDDIR}}/html"
       - task: linkcheck
       - task: validate-cddl
 
