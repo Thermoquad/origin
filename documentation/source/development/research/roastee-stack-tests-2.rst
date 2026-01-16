@@ -4,7 +4,7 @@ Roastee Stack Tests #2
 :Date: 2026-01-12
 :Author: Thermoquad
 :Status: **Implemented** ✓
-:Related: :doc:`roastee-stack-tests-1`, :doc:`fusain-ota-updates`, :doc:`fusain-error-communication`
+:Related: :doc:`roastee-stack-tests-1`, :doc:`fusain-ota-updates`, fusain-error-communication
 
 .. contents:: Table of Contents
    :local:
@@ -656,7 +656,7 @@ References
 **********
 
 - :doc:`fusain-ota-updates` — OTA byte string requirements (firmware chunks, SHA256 hashes)
-- :doc:`fusain-error-communication` — Error payload int type requirements
+- fusain-error-communication — Error payload int type requirements
 - `RFC 8949 - CBOR <https://datatracker.ietf.org/doc/html/rfc8949>`_
 - `cbor-x npm <https://www.npmjs.com/package/cbor-x>`_
 - `cborg npm <https://www.npmjs.com/package/cborg>`_

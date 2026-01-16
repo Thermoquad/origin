@@ -1456,11 +1456,10 @@ References
 .. [13] Wi-Fi Easy Connect (DPP)
    https://www.wi-fi.org/beacon/dan-harkins/wi-fi-easy-connect-simple-and-secure-onboarding-for-iot
 
-.. [14] Web Bluetooth API Documentation
-   https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API
+**Additional Resources:**
 
-.. [15] BLE Pairing and Security
-   https://technotes.kynetics.com/2018/BLE_Pairing_and_bonding/
+- Web Bluetooth API Documentation: https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API
+- BLE Pairing and Security: https://technotes.kynetics.com/2018/BLE_Pairing_and_bonding/
 
 Appendix A: SSID Generation
 ***************************
