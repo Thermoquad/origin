@@ -49,6 +49,8 @@ documentation/
 │   ├── hardware/            # Board documentation
 │   ├── tools/               # Heliostat, etc.
 │   ├── reference/           # API, glossary, specs
+│   ├── development/         # Development documentation
+│   │   └── roadmap/         # Milestone roadmaps (First Burn, etc.)
 │   └── contributing/        # Contribution guidelines
 └── build/                   # Generated output (not committed)
 ```
@@ -76,6 +78,22 @@ The Fusain protocol specification is the canonical reference for all implementat
 - **Fusain Library (Go):** `tools/heliostat/pkg/fusain/` - Reference Go implementation
   - Canonical Go implementation used by Heliostat analyzer
   - See `tools/heliostat/CLAUDE.md` for documentation
+- **Fusain Library (TypeScript):** `apps/roastee/packages/fusain/` - Reference TypeScript implementation
+  - For web/Node.js use (not yet published to npm)
+  - See `apps/roastee/CLAUDE.md` for documentation
+
+## Development Roadmap
+
+The documentation includes project roadmaps and milestone planning:
+
+- **Location:** `source/development/roadmap/`
+- **Current Milestone:** First Burn
+  - `first-burn.rst` - Complete task breakdown for first diesel heater burn with Helios firmware
+  - `verification-tests.rst` - 6 Helios verification tests using Stan test stand
+  - `burn-report-template.rst` - Template for documenting burn test results
+- **Purpose:** Define goals, requirements, and dependency chains for major development milestones
+
+See the organization CLAUDE.md "Development Roadmap" section for current status and priorities.
 
 ## CI/CD
 
@@ -101,8 +119,29 @@ The CI pipeline:
 
 ## AI Assistant Operations
 
-To reload all organization CLAUDE.md files or run a content integrity check, see the **CLAUDE.md Reload** and **Content Integrity Check** sections in the [Thermoquad Organization CLAUDE.md](../CLAUDE.md).
+### Content Integrity Check
+
+To verify consistency across all CLAUDE.md files in the organization, see the **Content Integrity Check** section in the [Thermoquad Organization CLAUDE.md](../CLAUDE.md).
+
+**How to Request:** Ask the AI assistant to "run a content integrity check on all CLAUDE.md files"
+
+### Content Status Integrity Check
+
+To validate that this documentation accurately reflects the actual Sphinx build output and specification content, see the **Content Status Integrity Check** section in the [Thermoquad Organization CLAUDE.md](../CLAUDE.md).
+
+**How to Request:** Ask the AI assistant to "run a content status integrity check on documentation"
+
+**What Gets Checked:**
+- Sphinx build succeeds without errors
+- All .rst files listed in documentation exist
+- Generated HTML output matches documented structure
+- Link validity (internal cross-references)
+- Protocol specification completeness (all message types documented)
+
+### CLAUDE.md Reload
+
+To reload all organization CLAUDE.md files, see the **CLAUDE.md Reload** section in the [Thermoquad Organization CLAUDE.md](../CLAUDE.md).
 
 ---
 
-**Last Updated:** 2026-01-09
+**Last Updated:** 2026-01-15

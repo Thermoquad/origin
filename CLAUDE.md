@@ -177,10 +177,54 @@ When AI assistants create implementation plans for Thermoquad projects, plans sh
 ## Platform & Tooling
 
 ### Target Hardware
-- **Platform:** Raspberry Pi Pico 2 (Development)
-  - RP2350A (Cortex-M33) - Current development boards
-  - RP2354A (Cortex-M33F) - Planned production boards
-- **RTOS:** Zephyr RTOS
+
+**Processor Architecture:** ARM Cortex-M33 (M33F on production chips)
+
+**RTOS:** Zephyr RTOS
+
+#### Development Hardware
+
+- **Raspberry Pi Pico 2:** RP2350A chip (60-pin QFN package)
+- **Raspberry Pi Pico 2W:** RP2350A chip with WiFi/Bluetooth (Infineon CYW43439)
+- **Flash:** External QSPI flash (separate component)
+- **ADC Channels:** 4 channels (plus 1 internal temperature sensor)
+
+#### Production Hardware
+
+**Processor Family:** RP2354 series (Package-on-Package with integrated flash)
+
+**RP2354A (60-pin QFN):**
+- Package-on-Package (PoP) stacking: Flash and processor in single footprint
+- ADC Channels: 4 channels
+- **Planned boards:** Block, Luna
+
+**RP2354B (80-pin QFN):**
+- Package-on-Package (PoP) stacking: Flash and processor in single footprint
+- ADC Channels: 8 channels (double the RP2354A)
+- Additional GPIO: 20 more pins than RP2354A
+- **Planned boards:** Hades (requires additional ADC channels)
+
+**Key RP2354 Advantages:**
+- Single component replaces RP2350A + external flash (simplified BOM)
+- Reduced PCB area (PoP vertical stacking)
+- Lower assembly complexity
+- Same software compatibility as RP2350 (Zephyr RTOS, instruction set)
+
+**Planned Production Boards:**
+- **Hades:** RP2354B (8 ADC channels)
+- **Block:** RP2354A (4 ADC channels)
+- **Luna:** RP2354A (4 ADC channels)
+
+#### Hardware Comparison
+
+| Feature | RP2350A (Pico 2/2W) | RP2354A (Production) | RP2354B (Hades) |
+|---------|---------------------|----------------------|-----------------|
+| **Package** | 60-pin QFN | 60-pin QFN | 80-pin QFN |
+| **Flash** | External QSPI | Integrated PoP | Integrated PoP |
+| **ADC Channels** | 4 | 4 | 8 |
+| **GPIO Pins** | Standard | Standard | +20 additional |
+| **Use Case** | Development only | Standard production | Requires more ADC |
+| **PCB Footprint** | Larger (2 components) | Smaller (PoP) | Smaller (PoP) |
 
 ### Build System
 - **West:** Zephyr workspace manager
@@ -422,12 +466,28 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 - **Documentation:** `apps/helios/CLAUDE.md`
 
 #### Slate - Controller Firmware
-- **Status:** ✅ Active development
+- **Status:** 🟡 Early prototype
 - **Location:** `apps/slate/`
 - **Platform:** Raspberry Pi Pico 2 (RP2350A)
 - **Purpose:** Controller with LVGL display for Helios telemetry monitoring
 - **Key Features:** LVGL display, serial communication, telemetry processing
 - **Documentation:** `apps/slate/CLAUDE.md`
+
+#### Stan - Test Stand System
+- **Status:** 📝 Planned (not yet implemented)
+- **Location:** `apps/stan/`
+- **Platform:** Raspberry Pi Pico 2W (RP2350A with WiFi)
+- **Purpose:** Parameter extraction and Helios verification
+- **Key Features:** Signal monitoring/generation, Pico 2W firmware, Go tooling with GoCV
+- **Documentation:** `apps/stan/CLAUDE.md`
+
+#### Roastee - PWA Monorepo
+- **Status:** 🟡 Early development
+- **Location:** `apps/roastee/`
+- **Platform:** TypeScript/Node.js (Web)
+- **Purpose:** Fusain protocol TypeScript implementation and future PWA application
+- **Key Features:** npm package, 100% test coverage, Apache-2.0 licensed
+- **Documentation:** `apps/roastee/CLAUDE.md`
 
 ### Shared Libraries
 
@@ -441,6 +501,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 - **Reference Implementations:**
   - **C:** `modules/lib/fusain/` - Embedded C for Zephyr RTOS
   - **Go:** `tools/heliostat/pkg/fusain/` - Reference Go implementation
+  - **TypeScript:** `apps/roastee/packages/fusain/` - Reference TypeScript implementation
 - **Documentation:** `modules/lib/fusain/CLAUDE.md`
 
 ### Development Tools
@@ -453,6 +514,70 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 - **Features:** Cobra CLI, TUI mode, error detection, statistics tracking
 - **Reference Go Implementation:** `pkg/fusain/` - Canonical Go implementation of Fusain protocol
 - **Documentation:** `tools/heliostat/CLAUDE.md`
+
+---
+
+## Development Roadmap
+
+### Current Milestone: First Burn
+
+**Goal:** Execute the first diesel heater burn cycle with Helios firmware controlling real hardware.
+
+**Documentation:** `origin/documentation/source/development/roadmap/first-burn.rst`
+
+**Status:** Parameter extraction phase - blocked on Stan implementation
+
+### Critical Path
+
+The First Burn milestone requires completing a dependency chain of 12 tasks across 8 tiers:
+
+1. **Stan Implementation** (Tier 0-2) - **CRITICAL BLOCKER**
+   - Test stand hardware breadboard
+   - Pico 2W firmware for signal monitoring
+   - Go utility with GoCV for webcam-based temperature correlation
+   - Status: NOT YET STARTED
+
+2. **Parameter Extraction** (Tier 3) - Depends on Stan
+   - Run original controller through burn cycles
+   - Capture thermistor voltage, motor RPM, pump timing, glow plug timing
+   - Correlate voltage with temperature via webcam reading phone app
+   - Status: BLOCKED
+
+3. **Data Post-Processing** (Tier 4) - Depends on Parameter Extraction
+   - Build complete thermistor lookup table (currently only accurate to 150°C, heater operates to 275°C)
+   - Document all hardware parameters
+   - Status: BLOCKED
+
+4. **Update Helios Parameters** (Tier 5) - Depends on Data Post-Processing
+   - Apply extracted parameters to Helios firmware
+   - Status: BLOCKED
+
+5. **Helios Verification** (Tier 6) - Depends on Parameter Updates
+   - Verify Helios behavior using Stan's simulated thermistor signals (PWM)
+   - Run 6 verification tests (normal cycle, emergency stop, ping timeout, flame-out, overheat recovery, overheat emergency)
+   - Status: BLOCKED
+
+6. **First Burn Execution** (Tier 7) - Depends on Verification
+   - Connect Helios to real heater and execute burn
+   - Status: BLOCKED
+
+### Parallel Work Needed
+
+While Stan blocks the critical path, these can be worked in parallel:
+
+- **Heliostat Controller Mode** - Add interactive TUI command for sending Fusain commands to Helios
+  - Encoder and command builders ARE implemented in `pkg/fusain/`
+  - Controller mode CLI command NOT yet implemented in `cmd/`
+  - Required for verification and first burn
+
+- **Slate WebSocket Bridge** - Enable remote Heliostat control via Slate
+  - WebSocket endpoint for bidirectional packet forwarding
+  - mDNS responder, WiFi credential storage
+  - Status: NOT yet implemented
+
+### Current Priority
+
+**Stan test stand system is the highest priority** - all parameter extraction work is blocked until Stan firmware and tooling are implemented.
 
 ---
 
@@ -604,7 +729,7 @@ This is the Thermoquad project organization. For questions or issues:
 
 ---
 
-**Last Updated:** 2026-01-11
+**Last Updated:** 2026-01-15
 
 **Organization Maintainer:** kazw
 
@@ -644,6 +769,8 @@ A **content integrity check** verifies consistency across all CLAUDE.md files in
 4. `apps/helios/CLAUDE.md` - Helios ICU firmware
 5. `apps/slate/CLAUDE.md` - Slate controller firmware
 6. `tools/heliostat/CLAUDE.md` - Heliostat analyzer (Go)
+7. `apps/roastee/CLAUDE.md` - Roastee PWA monorepo (TypeScript)
+8. `apps/stan/CLAUDE.md` - Stan test stand
 
 **When to Run:**
 - After updating protocol specifications
@@ -673,6 +800,82 @@ A **CLAUDE.md reload** reads all CLAUDE.md files in the organization to refresh 
 4. `apps/helios/CLAUDE.md` - Helios ICU firmware
 5. `apps/slate/CLAUDE.md` - Slate controller firmware
 6. `tools/heliostat/CLAUDE.md` - Heliostat analyzer (Go)
+7. `apps/roastee/CLAUDE.md` - Roastee PWA monorepo (TypeScript)
+8. `apps/stan/CLAUDE.md` - Stan test stand
 
 **How to Request:**
 Ask the AI assistant to "reload all CLAUDE.md files"
+
+---
+
+## Content Status Integrity Check
+
+A **content status integrity check** validates that CLAUDE.md documentation accurately reflects the actual state of the codebase. This goes beyond checking consistency between CLAUDE.md files - it verifies that the documentation matches reality.
+
+**Scope:** Content status integrity checks analyze **both CLAUDE.md files AND actual project files** (source code, configuration, dependencies, directory structure, etc.) to ensure documentation is current and accurate.
+
+**What to Check:**
+
+1. **Project Status Claims:**
+   - Verify status descriptions (✅ Active, 🟡 Prototype, etc.) match actual development activity
+   - Check if "implemented" features actually exist in code
+   - Validate that "planned" features are not yet implemented
+
+2. **File Structure:**
+   - Verify documented directory trees match actual filesystem
+   - Check that referenced files exist at documented paths
+   - Validate that documented components are present
+
+3. **Feature Implementation:**
+   - Check that features marked as "working" are actually implemented
+   - Verify API functions listed in documentation exist in headers
+   - Validate that described functionality matches code behavior
+
+4. **Dependencies and Versions:**
+   - Check package.json, go.mod, CMakeLists.txt match documented dependencies
+   - Verify version numbers are current
+   - Validate tool version requirements (.tool-versions, SDK versions)
+
+5. **Build System:**
+   - Verify Taskfile tasks exist and match documentation
+   - Check that build commands work as documented
+   - Validate configuration files match descriptions
+
+6. **Last Updated Dates:**
+   - Check if "Last Updated" dates are current (< 2 weeks for active projects)
+   - Flag CLAUDE.md files that haven't been updated despite code changes
+
+7. **Protocol Specifications:**
+   - Verify message type counts match between docs and code
+   - Check that constant values match across implementations
+   - Validate that CBOR schemas match documented structure
+
+**Files to Check Per Project:**
+
+- **Organization:** Directory structure, project list, reference implementation paths
+- **Documentation:** Sphinx build output, link validity, specification completeness
+- **Fusain C:** src/fusain.c, include/fusain/fusain.h, test coverage claims, CDDL sync
+- **Helios:** prj.conf, app.overlay, state machine implementation, controller count
+- **Slate:** Feature status vs actual code, display integration status
+- **Heliostat:** Go package structure, command implementations, statistics tracking
+- **Roastee:** package.json dependencies, TypeScript implementation completeness
+- **Stan:** Firmware vs tooling status, signal monitoring implementation
+
+**When to Run:**
+
+- After significant code changes to verify documentation was updated
+- Before releases to ensure user-facing docs are accurate
+- After adding new features to validate documentation completeness
+- Periodically (monthly) to catch documentation drift
+- After moving or refactoring code
+
+**How to Request:**
+
+Ask the AI assistant to "run a content status integrity check on [project-name]" or "run a content status integrity check on all projects"
+
+**Example Checks:**
+
+- If Slate CLAUDE.md says "✅ LVGL display working" → verify `src/display.c` exists and compiles
+- If Fusain C says "25 helper functions" → count actual `fusain_create_*` functions
+- If Helios says "4 thermometers" → check `DEVICE_THERMOMETER_COUNT` in code
+- If Roastee says "published to npm" → verify package exists on npmjs.com
