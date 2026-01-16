@@ -914,7 +914,7 @@ Error Display
 
 Provide a debug view accessible via settings:
 
-.. code-block:: html
+.. code-block:: text
 
    <!-- DebugLog.svelte -->
    <script>
