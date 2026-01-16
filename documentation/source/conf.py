@@ -56,6 +56,7 @@ copybutton_prompt_is_regexp = True
 # Ignore URLs that block automated requests (403 Forbidden)
 linkcheck_ignore = [
     r'https://www\.npmjs\.com/.*',
+    r'https://johal\.in/.*',
 ]
 
 
