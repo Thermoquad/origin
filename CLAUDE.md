@@ -644,6 +644,10 @@ A **content integrity check** verifies consistency across all CLAUDE.md files in
 4. `apps/helios/CLAUDE.md` - Helios ICU firmware
 5. `apps/slate/CLAUDE.md` - Slate controller firmware
 6. `tools/heliostat/CLAUDE.md` - Heliostat analyzer (Go)
+7. `tools/heliostat/pkg/fusain/CLAUDE.md` - Go Fusain reference implementation
+8. `apps/roastee/CLAUDE.md` - Roastee PWA monorepo (TypeScript)
+9. `apps/roastee/packages/fusain/CLAUDE.md` - TypeScript Fusain reference implementation
+10. `apps/stan/CLAUDE.md` - Stan test stand
 
 **When to Run:**
 - After updating protocol specifications
@@ -673,6 +677,10 @@ A **CLAUDE.md reload** reads all CLAUDE.md files in the organization to refresh 
 4. `apps/helios/CLAUDE.md` - Helios ICU firmware
 5. `apps/slate/CLAUDE.md` - Slate controller firmware
 6. `tools/heliostat/CLAUDE.md` - Heliostat analyzer (Go)
+7. `tools/heliostat/pkg/fusain/CLAUDE.md` - Go Fusain reference implementation
+8. `apps/roastee/CLAUDE.md` - Roastee PWA monorepo (TypeScript)
+9. `apps/roastee/packages/fusain/CLAUDE.md` - TypeScript Fusain reference implementation
+10. `apps/stan/CLAUDE.md` - Stan test stand
 
 **How to Request:**
 Ask the AI assistant to "reload all CLAUDE.md files"
