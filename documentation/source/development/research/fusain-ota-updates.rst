@@ -612,7 +612,7 @@ CDDL Schema
 The following CDDL excerpt defines the OTA message payloads. This extends the
 existing ``fusain.cddl`` schema.
 
-.. code-block:: cddl
+.. code-block:: text
 
    ; ===========================================================================
    ; OTA Message Payloads (0x40-0x4F)
