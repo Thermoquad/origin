@@ -2,10 +2,12 @@ manifest:
   remotes:
     - name: zephyrproject-rtos
       url-base: git@github.com:zephyrproject-rtos
+    - name: thermoquad
+      url-base: git@github.com:Thermoquad
   projects:
     - name: zephyr
-      remote: zephyrproject-rtos
-      revision: 545c2870e9358d52e319b9ae301845e053376fe1
+      remote: thermoquad
+      revision: feat/bt-hci-cyw43-shared-bus
       import: true
   self:
     path: origin
