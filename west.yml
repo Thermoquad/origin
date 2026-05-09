@@ -9,5 +9,9 @@ manifest:
       remote: thermoquad
       revision: feat/bt-hci-cyw43-shared-bus
       import: true
+    - name: zephyr-cyw43-bt
+      remote: thermoquad
+      revision: main
+      path: modules/lib/zephyr-cyw43-bt
   self:
     path: origin
