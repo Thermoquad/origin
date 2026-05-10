@@ -13,5 +13,9 @@ manifest:
       remote: thermoquad
       revision: main
       path: modules/lib/zephyr-cyw43-bt
+    - name: zephyr-servo-rpi-pio
+      remote: thermoquad
+      revision: main
+      path: modules/drivers/zephyr-servo-rpi-pio
   self:
     path: origin
