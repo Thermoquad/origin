@@ -6,8 +6,8 @@ manifest:
       url-base: git@github.com:Thermoquad
   projects:
     - name: zephyr
-      remote: thermoquad
-      revision: feat/bt-hci-cyw43-shared-bus
+      remote: zephyrproject-rtos
+      revision: v4.4.0
       import: true
     - name: zephyr-cyw43-bt
       remote: thermoquad

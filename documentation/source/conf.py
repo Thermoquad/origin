@@ -53,10 +53,9 @@ copybutton_prompt_is_regexp = True
 
 # -- Linkcheck configuration -------------------------------------------------
 
-# Ignore URLs that block automated requests (403 Forbidden)
+# Only check internal links — external URLs break unpredictably (403, 410, etc.)
 linkcheck_ignore = [
-    r'https://www\.npmjs\.com/.*',
-    r'https://johal\.in/.*',
+    r'https?://.*',
 ]
 
 
