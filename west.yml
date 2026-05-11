@@ -11,11 +11,11 @@ manifest:
       import: true
     - name: zephyr-cyw43-bt
       remote: thermoquad
-      revision: main
+      revision: master
       path: modules/lib/zephyr-cyw43-bt
     - name: zephyr-servo-rpi-pio
       remote: thermoquad
-      revision: main
+      revision: master
       path: modules/drivers/zephyr-servo-rpi-pio
   self:
     path: origin
